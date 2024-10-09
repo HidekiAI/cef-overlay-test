@@ -3,8 +3,8 @@
 [ -e bin ] || ./get-binaries.sh
 [ -e build ] || mkdir -p build
 
-cat bin/.env.local
-source bin/.env.local
+cat .env.local
+source .env.local
 
 cmake -DCMAKE_BUILD_TYPE:STRING=Debug \
     -DCMAKE_EXPORT_COMPILE_COMMANDS:BOOL=TRUE \
