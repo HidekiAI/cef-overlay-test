@@ -52,9 +52,9 @@ echo "Linux:" ; find ./bin/cef_linux64/Release/
 
 echo "#!/bin/bash" > .env.local
 echo export CEF_VERSION="${_CEF_VERSION}" >> .env.local
-echo export CEF_BIN_PATH_MAC="$(pwd)/bin/cef_macosarm64/Release" >> .env.local
-echo export CEF_BIN_PATH_WIN="$(pwd)/bin/cef_windows64/Release" >> .env.local
-echo export CEF_BIN_PATH_LIN="$(pwd)/bin/cef_linux64/Release" >> .env.local
+echo export CEF_BIN_PATH_MAC="$(pwd)/bin/cef_macosarm64" >> .env.local
+echo export CEF_BIN_PATH_WIN="$(pwd)/bin/cef_windows64" >> .env.local
+echo export CEF_BIN_PATH_LIN="$(pwd)/bin/cef_linux64" >> .env.local
 
 cat .env.local
 source .env.local

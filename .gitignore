@@ -35,4 +35,5 @@
 .env.local
 bin/
 build/
+build*/
 .vscode/

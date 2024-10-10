@@ -17,3 +17,25 @@ To lean and test-compile (and run) CEF (basically starting off with cefsample an
 ## Technical Issues
 
 - Turns out I have to `clang++`  (`g++`) using C++ 17 (via `-std=c++17`) so that compiling (and linking) will succeed
+- For both Linux and Windows, because the GUI (GTK and WinForm respectively) are based on C/C++ library, there are no bridge/proxy from C++ to platform-native GUI libraries
+  - For MacOS on the other hand, the platform-native GUI is based on Objective-C libraries, in which you'd have to have Objective-C compiler reference (`static`) function-methods in C++ and link it.  If you've ever done any InterOp'ing in C# (actually, .NET) to native C++, or have tried to access GTK3 and/or WinForm from Rust in which you had to run `bindgen` to create wrapper methods of C/C++ libraries to Rust, you're already familiar with this practice.
+- I am using `cmake` (`CMakeLists.txt`) to support cross-compile and multiple-platform, and have used [this as base](https://stackoverflow.com/questions/20962869/cmakelists-txt-for-an-objective-c-project) starting point.
+  - I am not using XCode project (it's based on mixing CPP and OBJCXX)
+
+## Setup and Install
+
+### Prerequisite
+
+Due to not knowing what platform you're on, as well as unaware whether you're using `apt` (Debian hybrids - Linux), `pacman` (Arch, SuSE, MSys64/MinGW - Windows), or even `brew` (MacOS), you'll have to manually install it yourself.  What you need are the following:
+
+- `clang` and `llvm` so that `g++` is generic on all platform - note that you'll have about 3 choices on Windows, chose MSYS64 (not the other 2).  What is most important is that you make sure to install the version that supports C++17 because of MacOS GUI (Cocoa relies heavily on C++ `templates` defined in C++17 and above)
+- `cmake` and `ninja` - again, for portable.  Optionally you can install `GNU make` but will yield towards `ninja`
+- Other Unix/Linux/BSD related CLI tools:
+  - `tar` - to untar binaries from spotifycdn
+  - `wget` - if you prefer `cURL`, you'll have to modify `build.sh` manually/yourself
+  - `bash` - I don't wish to write 2 scripts, one for `bash` and one for `zsh`, so on MacOS, you'll have to install `bash` yourself (I use commands such as `uname -a`, `source`, `-e ||`, etc)
+- XCode - you'll need the whole SDK'ish (I don't know what to call it, I'm still learning) package so that you can have Objective-C++ to consume/link the C++
+
+### Building
+
+Use `build.sh`; I try to `echo` warnings/errors in the shell script when I cannot find `wget` or other CLI packages that is possibly optional on MacOS, as well as listing ahead on the [Prerequisite](#prerequisite) above, but there may be times where I've preinstalled it and have forgotten about it.
