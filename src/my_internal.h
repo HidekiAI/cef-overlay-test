@@ -1,5 +1,5 @@
-#ifndef MY_LIB_H
-#define MY_LIB_H
+#ifndef MY_INT_LIB_H
+#define MY_INT_LIB_H
 
 #if defined(__linux) || defined(__linux__) || defined(linux)
 # define LINUX
@@ -11,4 +11,4 @@
 
 void mylib_helloworld();
 
-#endif
+#endif  // MY_INT_LIB_H

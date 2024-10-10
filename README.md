@@ -24,17 +24,50 @@ To lean and test-compile (and run) CEF (basically starting off with cefsample an
 
 ## Setup and Install
 
-### Prerequisite
+### Build Prerequisite
 
 Due to not knowing what platform you're on, as well as unaware whether you're using `apt` (Debian hybrids - Linux), `pacman` (Arch, SuSE, MSys64/MinGW - Windows), or even `brew` (MacOS), you'll have to manually install it yourself.  What you need are the following:
 
 - `clang` and `llvm` so that `g++` is generic on all platform - note that you'll have about 3 choices on Windows, chose MSYS64 (not the other 2).  What is most important is that you make sure to install the version that supports C++17 because of MacOS GUI (Cocoa relies heavily on C++ `templates` defined in C++17 and above)
-- `cmake` and `ninja` - again, for portable.  Optionally you can install `GNU make` but will yield towards `ninja`
+- `cmake` and `ninja` - again, for portable.  Optionally you can install `GNU make` but I will yield towards `ninja`
 - Other Unix/Linux/BSD related CLI tools:
   - `tar` - to untar binaries from spotifycdn
   - `wget` - if you prefer `cURL`, you'll have to modify `build.sh` manually/yourself
   - `bash` - I don't wish to write 2 scripts, one for `bash` and one for `zsh`, so on MacOS, you'll have to install `bash` yourself (I use commands such as `uname -a`, `source`, `-e ||`, etc)
 - XCode - you'll need the whole SDK'ish (I don't know what to call it, I'm still learning) package so that you can have Objective-C++ to consume/link the C++
+
+### `bash` and other Unix/Linux CLI commands
+
+One issue about this project is that (as mentioned above), I am *VERY* `bash` (Linux CLI command) biased.  You *MUST* make sure one way or another, for even VSCode to be able to access `bash` because you will see logics even in `CMakeLists.txt` (`cmake`) build logic like this:
+
+```cmake
+# Check if the C and C++ compilers are set in the environment variables
+if(DEFINED ENV{CC})
+    set(CMAKE_C_COMPILER $ENV{CC})
+else()
+    execute_process(COMMAND which clang OUTPUT_VARIABLE CLANG_PATH OUTPUT_STRIP_TRAILING_WHITESPACE)
+    if(CLANG_PATH)
+        set(CMAKE_C_COMPILER ${CLANG_PATH})
+        message(WARNING "CC environment variable is not set, defaulting to clang at ${CLANG_PATH}")
+    else()
+        message(FATAL_ERROR "CC environment variable is not set and clang not found in PATH")
+    endif()
+endif()
+
+if(DEFINED ENV{CXX})
+    set(CMAKE_CXX_COMPILER $ENV{CXX})
+else()
+    execute_process(COMMAND which clang++ OUTPUT_VARIABLE CLANGXX_PATH OUTPUT_STRIP_TRAILING_WHITESPACE)
+    if(CLANGXX_PATH)
+        set(CMAKE_CXX_COMPILER ${CLANGXX_PATH})
+        message(WARNING "CXX environment variable is not set, defaulting to clang++ at ${CLANGXX_PATH}")
+    else()
+        message(FATAL_ERROR "CXX environment variable is not set and clang++ not found in PATH")
+    endif()
+endif()
+```
+
+This IMHO is better than hard-coding paths depending on different OS.  By doing `which clang++` (or `which g++`) to get clang and clang++ paths (i.e. `/usr/bin/g++`, `/c/msys/mingw64/usr/bin/g++`, `/mingw64/bin/clang`, etc) dynamically, we do not have to hard code the paths.  Even just testing on Linux, not all distros will place `gcc` in same directory (i.e. `/bin/gcc`, `/usr/bin/gcc`, `$HOME/bin/gcc`, `/opt/bin/gcc`, etc).  Screw that, just do `export CXX="$(which clang++)"` during build-time and dynamically determine it...
 
 ### Building
 
