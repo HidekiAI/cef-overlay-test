@@ -33,7 +33,10 @@
 
 .env
 .env.local
+CMakeCache.txt
 bin/
 build/
 build*/
 .vscode/
+CMakeFiles/
+
