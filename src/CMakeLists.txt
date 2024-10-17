@@ -3,6 +3,12 @@
 # - "cmake.generator": "Ninja Multi-Config"
 cmake_minimum_required(VERSION 3.16)
 
+# Set the C++ standard
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED True)
+
+#set(CMAKE_GENERATOR_PLATFORM x64)
+
 # Check if the C and C++ compilers are set in the environment variables
 if(DEFINED ENV{CC})
     set(CMAKE_C_COMPILER $ENV{CC})
@@ -32,16 +38,7 @@ else()
     endif()
 endif()
 
-
-# Set the C++ standard
-set(CMAKE_CXX_STANDARD 17)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
 project(MySampleCEFApp)
-
-# Set the Objective-C++ standard
-set(CMAKE_OBJCXX_STANDARD 17)
-set(CMAKE_OBJCXX_STANDARD_REQUIRED ON)
 
 if (CMAKE_SYSTEM_NAME STREQUAL "Linux" OR CMAKE_SYSTEM_NAME STREQUAL "Windows")
     message(STATUS "Configuring for Linux or Windows")
@@ -54,7 +51,7 @@ endif()
 #include_directories(${PROJECT_SOURCE_DIR}/include)
 
 # If we have other custom libraries that needs to be built first and linked as separate library:
-add_library(MySeparateLib STATIC my_external_lib.cpp my_external_lib.h)
+add_library(my_external_lib STATIC my_external_lib.cpp my_external_lib.h)
 
 # Source files (shared by ALL platforms)
 set(SOURCES
@@ -79,7 +76,7 @@ if (UNIX)
     list(APPEND SOURCES my_internal_lib.cpp)
 
     # Include directories based on ${CEF_BIN_PATH_XXX}/include"
-    include_directories(${CEF_BIN_PATH_LIN}/include/linux)
+    include_directories(${CEF_BIN_PATH_LIN}/include/linux ./ ./src ./include)
     link_directories(${CEF_BIN_PATH_LIN}/Release)
 
     # add_executable(MyExecutable ${CEF_BIN_PATH_LIN}/some_binary)
@@ -104,7 +101,7 @@ elseif (WIN32 OR MSYS OR MINGW)
     list(APPEND SOURCES my_internal_lib.cpp)
 
     # Include directories based on ${CEF_BIN_PATH_XXX}/include"
-    include_directories(${CEF_BIN_PATH_WIN}/include/windows)
+    include_directories(${CEF_BIN_PATH_WIN}/include/windows ./ ./src ./include)
     link_directories(${CEF_BIN_PATH_WIN}/Release)
 
     add_executable(${PROJECT_NAME} ${SOURCES})
@@ -128,7 +125,7 @@ elseif (APPLE)
     list(APPEND SOURCES my_internal_lib.mm)
 
     # Include directories based on ${CEF_BIN_PATH_XXX}/include"
-    include_directories(${CEF_BIN_PATH_MAC}/include/macos)
+    include_directories(${CEF_BIN_PATH_MAC}/include/macos ./ ./src ./include)
     link_directories(${CEF_BIN_PATH_MAC}/Release)
 
     add_executable(${PROJECT_NAME} ${SOURCES})
