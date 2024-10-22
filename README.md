@@ -24,17 +24,88 @@ To lean and test-compile (and run) CEF (basically starting off with cefsample an
 
 ## Setup and Install
 
+First, head down ([below](#build prerequisite)) to install all the prerequisite of buildutils and build-chaintools.
+
+Once all is in place, you should just be able to run:
+
+```bash
+$ ./build.sh
+```
+
+The script should work on MinGW (Windows), Linux, and macOS (all verified).  It will first download (if not present) the CEF binaries for compiling  (header files) and linking (lib files) for Release build-target.
+
+The script will try to precheck for the CLI tools, and if the script complains, locate the missing packages in prerequisite below and try again.  As long as you do not change the `CMakeFiles.txt` (and the `.in` include templates) files, there should be no need to delete the `build.<platform>` directory.
+
+Final binaries whould reside in the `build.<platform>` (where platform are Linux, win.mingw, or mac).  You can also do `find -type f -perm -111` (on mac) or `find -type f -executable` (on Linux and MinGW) to find the executable files generated.
+
 ### Build Prerequisite
 
 Due to not knowing what platform you're on, as well as unaware whether you're using `apt` (Debian hybrids - Linux), `pacman` (Arch, SuSE, MSys64/MinGW - Windows), or even `brew` (MacOS), you'll have to manually install it yourself.  What you need are the following:
+Here are lists of packages you need to preinstall (on Linux, Windows MSYSTEM=UCRT64, and macOS):
 
-- `clang` and `llvm` so that `g++` is generic on all platform - note that you'll have about 3 choices on Windows, chose MSYS64 (not the other 2).  What is most important is that you make sure to install the version that supports C++17 because of MacOS GUI (Cocoa relies heavily on C++ `templates` defined in C++17 and above)
-- `cmake` and `ninja` - again, for portable.  Optionally you can install `GNU make` but I will yield towards `ninja`
-- Other Unix/Linux/BSD related CLI tools:
-  - `tar` - to untar binaries from spotifycdn
-  - `wget` - if you prefer `cURL`, you'll have to modify `build.sh` manually/yourself
+- [vcpkg](https://learn.microsoft.com/en-us/vcpkg/get_started/get-started?pivots=shell-bash) - note that on macOS (unlike Linux and MinGW), the app installation is at `VCPKG_ROOT=/your/github/cloned/dir` (basically, `bootstrap-vcpkg.sh` that you'd run on macOS will just copy it on that directory, commonly on both Linux and MinGW, it's in `VCPKG_ROOT=/opt/vcpkg` dir)
+- `clang` and `llvm` so that `g++` is generic on all platform - note that you'll have about 3 choices on Windows, chose UCRT64 (not MSYS, CLANG64, or MINGW64).  What is most important is that you make sure to install the version that supports C++17 because of MacOS GUI (Cocoa relies heavily on C++ `templates` defined in C++17 and above)
+- Other CLI tools that may need to be installed:
   - `bash` - I don't wish to write 2 scripts, one for `bash` and one for `zsh`, so on MacOS, you'll have to install `bash` yourself (I use commands such as `uname -a`, `source`, `-e ||`, etc)
-- XCode - you'll need the whole SDK'ish (I don't know what to call it, I'm still learning) package so that you can have Objective-C++ to consume/link the C++
+  - `tar` - to untar binaries from spotifycdn
+  - `wget` - if you prefer `cURL`, you'll have to modify `build.sh` manually/yourself; (some distros on Linux comes with cURL but not wget)
+  - tar
+- `cmake` and `ninja` - again, for portable.  Optionally you can install `GNU make` but I will yield towards `ninja`; one frustrating gotcha I've encounted on MinGW (not on Linux and/or macOS) is that you have to explicitly tell CMake via `CC` and `CXX` environment veriable to reference `/c/msys64/mingw64/bin/clang++.exe` (with the ".exe") or else it won't create `ninja.build` file!
+  - Note that for Windows, you have to install the `ucrt` version of cmake (i.e. `mingw-w64-ucrt-x86_64-cmake`)
+- XCode (for macOS only) - you'll need the whole SDK'ish (I don't know what to call it, I'm still learning) package so that you can have Objective-C++ to consume/link the C++
+
+### Windows: MSYS2 (MinGW)
+
+Note that for the sake of not wanting to install toolchains that are not bash/zsh compatible, AND the fact that Microsoft requires license (paid) if the compiled applications are for commercial use, hence you cannot install Microsoft Community and assume you can compile things for free!
+
+For C/C++ development, MinGW comes with 4 flavors of binary output (of which, 3 uses `gcc` and one uses `llvm`).  The following are the Environment Variable you would set for [MSYSTEM](https://www.msys2.org/docs/environments/#__tabbed_1_1):
+
+- MSYS
+- UCRT64
+- CLANG64
+- MINGW64
+
+This author prefers MSYSTEM=MINGW64 mainly because you can cross-compile inside Linux with for Windows output!  Unfortunately, the CEF binary are build using MSVC (it makes no sense to me since CEF maintainers assumes that you'll be linking using MSVC, which means commercial usage).
+
+The UCRT in the new "universal" (standard) C Run-Time which Microsoft newer Visual Studios uses to compile.  Fortunately, MSYS2 offers toolchains to compile and link against non-legacy MSVC built libraries.  Non-legacy, meaning the older MSVCRT (Microsoft C Run-Time) built libraries (usually, that's only 32-bits) will not link.
+
+Long story short, this author spent (wasted) more than 1/2 day scratching my head figuring out why CEF (`libcef.lib`) library on Windows will not link!
+
+You'll first need to make sure one way or another, set your environment variable:
+
+```bash
+$export MSYSTEM=UCRT64
+```
+
+Though this author's bash script will set it in multiple places, it is mentioned here because when you are pulling in the libraries and compiler/build toolchains, you'be be offered 4 choices when you do `pacman -Ss <dev-package>` like so:
+
+```bash
+$ pacman --search --sync "7zip"
+clangarm64/mingw-w64-clang-aarch64-7zip 24.08-1
+    A file archiver with a high compression ratio (mingw-w64)
+mingw64/mingw-w64-x86_64-7zip 24.08-1
+    A file archiver with a high compression ratio (mingw-w64)
+ucrt64/mingw-w64-ucrt-x86_64-7zip 24.08-1
+    A file archiver with a high compression ratio (mingw-w64)
+clang64/mingw-w64-clang-x86_64-7zip 24.08-1
+    A file archiver with a high compression ratio (mingw-w64)
+msys/p7zip 17.05-2 (compression)
+    Command-line version of the 7zip compressed file archiver
+    
+$ pacman --search --sync "cbindgen"
+clangarm64/mingw-w64-clang-aarch64-cbindgen 0.27.0-1
+    A project for generating C bindings from Rust code (mingw-w64)
+ucrt64/mingw-w64-ucrt-x86_64-cbindgen 0.27.0-1
+    A project for generating C bindings from Rust code (mingw-w64)
+clang64/mingw-w64-clang-x86_64-cbindgen 0.27.0-1
+    A project for generating C bindings from Rust code (mingw-w64)
+```
+
+This author used "7zip" as an example just to mention that the `msys` is not really a dev library to link against, it's actually a system application.  As a separate example, this author used Rust's "cbindgen" to show that there are 3 targets you can choose from.  Of the 3, it is most likely the case that you do not need to bother with `arm64` henc your choices are either `ucrt` or `clang`.  As mentioned above, for CEF to link properly, at least for this project, you must choose `ucrt` for your Windows target binary.
+
+Lastly, you want to make sure VSCode can find your Universal CRT compiler (`clang` and `clang++`) rather than the MinGW64 version:
+
+![VSCode CMake](./VSCode-cmake-UCRT64.png)
 
 ### `bash` and other Unix/Linux CLI commands
 

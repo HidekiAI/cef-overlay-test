@@ -39,4 +39,8 @@ build/
 build*/
 .vscode/
 CMakeFiles/
+*:/
+*:
+*:*
+*:*/
 

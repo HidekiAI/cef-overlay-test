@@ -50,11 +50,16 @@ echo "macOS:" ; find ./bin/cef_macosarm64/Release/ | grep -v "\.pak\|.lproj"
 echo "Windows:" ; find ./bin/cef_windows64/Release/
 echo "Linux:" ; find ./bin/cef_linux64/Release/
 
+# NOTE: Do NOT make PATH absolute (i.e. $(pwd)/bin/cef_windows64) because on MinGW (not on Linux)
+# CMake's $ENV{CEF_BIN_PATH_WIN} will try to GUESS and wrongly replace absolute paths
+# which gets confused on "-I" include paths!
+# NOTE: I could do `uname` to check to see if it's MSYS but it's harmless to define MSYSTEM on Linux and/or macOS so we'll just export it...
 echo "#!/bin/bash" > .env.local
+echo export MSYSTEM=UCRT64 >> .env.local
 echo export CEF_VERSION="${_CEF_VERSION}" >> .env.local
-echo export CEF_BIN_PATH_MAC="$(pwd)/bin/cef_macosarm64" >> .env.local
-echo export CEF_BIN_PATH_WIN="$(pwd)/bin/cef_windows64" >> .env.local
-echo export CEF_BIN_PATH_LIN="$(pwd)/bin/cef_linux64" >> .env.local
+echo export CEF_BIN_PATH_MAC="./bin/cef_macosarm64" >> .env.local
+echo export CEF_BIN_PATH_WIN="./bin/cef_windows64" >> .env.local
+echo export CEF_BIN_PATH_LIN="./bin/cef_linux64" >> .env.local
 
 cat .env.local
 source .env.local
