@@ -34,6 +34,7 @@
 .env
 .env.local
 CMakeCache.txt
+*.import
 bin/
 build/
 build*/

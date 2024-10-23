@@ -1,4 +1,5 @@
 #!/bin/bash
+_BUILD_TYPE=${1:-${_BUILD_TYPE}}
 if [ -e $(which wget) ]; then
     echo "wget is installed"
 else
@@ -30,11 +31,11 @@ _CEF_VERSION="129.0.11+g57354b8+chromium-129.0.6668.90"
 #wget https://cef-builds.spotifycdn.com/cef_binary_129.0.11%2Bg57354b8%2Bchromium-129.0.6668.90_linux64.tar.bz2
 [ -e "cef_binary_${_CEF_VERSION}_linux64.tar.bz2" ] || wget "${_HTTP}/cef_binary_${_CEF_VERSION}_linux64.tar.bz2"
 
-tar -xv --exclude="Debug" -f "cef_binary_${_CEF_VERSION}_macosarm64.tar.bz2"
-tar -xv --exclude="Debug" -f "cef_binary_${_CEF_VERSION}_windows64.tar.bz2"
-tar -xv --exclude="Debug" -f "cef_binary_${_CEF_VERSION}_linux64.tar.bz2"
+[ -e  "cef_binary_${_CEF_VERSION}_macosarm64" ] || tar -xv --exclude="Debug" -f "cef_binary_${_CEF_VERSION}_macosarm64.tar.bz2"
+[ -e  "cef_binary_${_CEF_VERSION}_windows64" ] || tar -xv --exclude="Debug" -f "cef_binary_${_CEF_VERSION}_windows64.tar.bz2"
+[ -e  "cef_binary_${_CEF_VERSION}_linux64" ] || tar -xv --exclude="Debug" -f "cef_binary_${_CEF_VERSION}_linux64.tar.bz2"
 
-# Remove all the "/Debug" folders and keep only the "/Release" folders - this will also reduce space
+# Remove all the "/Debug" folders and keep only the "/${_BUILD_TYPE}" folders - this will also reduce space
 # Hopefully, this will not delete/remove LICENSE and README files
 find . -type d -name "Debug" -exec rm -rf {} \;
 
@@ -46,9 +47,9 @@ ln -svf cef_binary_${_CEF_VERSION}_linux64 cef_linux64
 ## show all the binaries we're interested in...
 #find . -type f -perm -111      # NOTE: Unfortunately, on Windows, it will force ALL files to be executable (including header files due to NTFS characteristics)
 cd ..
-echo "macOS:" ; find ./bin/cef_macosarm64/Release/ | grep -v "\.pak\|.lproj"
-echo "Windows:" ; find ./bin/cef_windows64/Release/
-echo "Linux:" ; find ./bin/cef_linux64/Release/
+echo "macOS:" ; find ./bin/cef_macosarm64/${_BUILD_TYPE}/ | grep -v "\.pak\|.lproj"
+echo "Windows:" ; find ./bin/cef_windows64/${_BUILD_TYPE}/
+echo "Linux:" ; find ./bin/cef_linux64/${_BUILD_TYPE}/
 
 # NOTE: Do NOT make PATH absolute (i.e. $(pwd)/bin/cef_windows64) because on MinGW (not on Linux)
 # CMake's $ENV{CEF_BIN_PATH_WIN} will try to GUESS and wrongly replace absolute paths
@@ -63,3 +64,56 @@ echo export CEF_BIN_PATH_LIN="./bin/cef_linux64" >> .env.local
 
 cat .env.local
 source .env.local
+
+# NOTE: According to "https://github.com/chromelyapps/Chromely/blob/master/Documents/cef_binaries_download.md", I have to 
+# do the following for macOS target:
+# >> Rename file \${_BUILD_TYPE}\Chromium Embedded Framework.framework\Chromium Embedded Framework to libcef.dylib
+[ -e ${CEF_BIN_PATH_MAC}/${_BUILD_TYPE}/libcef.dylib ] || cp "${CEF_BIN_PATH_MAC}/${_BUILD_TYPE}/Chromium Embedded Framework.framework/Chromium Embedded Framework" ${CEF_BIN_PATH_MAC}/${_BUILD_TYPE}/libcef.dylib
+
+uname -a
+# `uname -o`: "GNU/Linux", "Msys", "Darwin"
+_OS=$(uname -o)
+
+# Finally, we NEED "cef_wrapper_dll" for the "cefclient" to work
+pushd .
+cd ..   # we're already in "bin" directory, so go up one level so when we cd to $CEF_BIN_PATH_XXX, it's correct
+if [ "${_OS}" == "GNU/Linux" ]; then
+    echo "Setting up for Linux..."
+    _TARGET="libcef_dll_wrapper.a"
+    cd ${CEF_BIN_PATH_LIN}
+    # Look for "${CEF_BIN_PATH_LIN}/build/libcef_dll_wrapper/libcef_dll_wrapper.a"
+    if ! [ -e "build/libcef_dll_wrapper/${_TARGET}" ]; then
+        [ -e build ] || mkdir build
+        cd build
+        cmake -G "Unix Makefiles" ..
+        make && find . -name "${_TARGET}" -exec cp {} ../${_BUILD_TYPE}/ \;
+    fi
+elif [ "${_OS}" == "Msys" ]; then
+    export MSYSTEM=CLANG64
+    echo "Setting up for MSYS64/MinGW Windows (via ${MSYSTEM})..."
+    # NOTE: CEF is Visual Studios/MSBuild based so maybe it's ".lib" instead?
+    _TARGET="libcef_dll_wrapper.a"
+    cd ${CEF_BIN_PATH_WIN}
+    # Look for "${CEF_BIN_PATH_WIN}/build/libcef_dll_wrapper/libcef_dll_wrapper.lib"
+    if ! [ -e "build/libcef_dll_wrapper/${_TARGET}" ]; then
+        [ -e build ] || mkdir build
+        cd build
+        cmake -G "Unix Makefiles" ..
+        make && find . -name "${_TARGET}" -exec cp {} ../${_BUILD_TYPE}/ \;
+    fi
+elif [ "${_OS}" == "Darwin" ]; then
+    echo "Setting up for macOS..."
+    cd ${CEF_BIN_PATH_MAC}
+    _TARGET="libcef_dll_wrapper.a"
+    # Look for "${CEF_BIN_PATH_MAC}/build/libcef_dll_wrapper/libcef_dll_wrapper.a"
+    if ! [ -e "build/libcef_dll_wrapper/${_TARGET}" ]; then
+        [ -e build ] || mkdir build
+        cd build
+        cmake -G "Unix Makefiles" ..
+        make && find . -name "${_TARGET}" -exec cp {} ../${_BUILD_TYPE}/ \;
+    fi
+else
+    echo "Unknown/unsupported OS type: ${_OS}"
+    exit -666
+fi
+popd

@@ -8,11 +8,19 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 set(CMAKE_C_COMPILER $ENV{CC})
 set(CMAKE_CXX_COMPILER $ENV{CXX})
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
+#set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 set(CMAKE_CONFIGURATION_TYPES Debug Release)
 set(CMAKE_BUILD_TYPE Release)
 project(MySampleCEFTestApp_Src)
 message(STATUS "#################################### ${PROJECT_NAME}")
+if("${CMAKE_BINARY_DIR}" STREQUAL "")
+    message(FATAL_ERROR "CMAKE_BINARY_DIR is empty. Please specify a valid build directory.")
+endif()
+
+if (CMAKE_SOURCE_DIR STREQUAL CMAKE_BINARY_DIR)
+    message(FATAL_ERROR "CMake must be run from outside the source directory")
+endif()
+
 message(STATUS "SOURCE: ${CMAKE_SOURCE_DIR}")
 message(STATUS "DEST (Output): ${CMAKE_BINARY_DIR}")
 message(STATUS "CMAKE_RUNTIME_OUTPUT_DIRECTORY: ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
@@ -80,15 +88,31 @@ else()
     message(STATUS "Unknown/Unhandled CMAKE_SYSTEM_NAME")
 endif()
 
-
 ######################################################
 # If we have other custom libraries that needs to be built first and linked as separate library:
 set(MY_EXTERNAL_LIB "my_external_lib")
 
+# PROJECT_NAME will be the executable name (i.e. "MySampleCEFTestApp_Src.exe")
+# source files relative to THIS CMakeLists.txt file...
+set(SOURCES
+    ./my_internal_lib.cpp
+)
+
+# Collect all .cc files in the src/browser directory
+file(GLOB_RECURSE BROWSER_WIN_SOURCES browser/*_win.*)
+file(GLOB_RECURSE BROWSER_LIN_SOURCES browser/*_gtk.*)
+file(GLOB_RECURSE BROWSER_MAC_SOURCES browser/*_mac.*)
+file(GLOB_RECURSE COMMON_SOURCES common/*.cc)
+file(GLOB_RECURSE COMMON_HEADERS common/*.h)
+file(GLOB_RECURSE RENDERER_SOURCES renderer/*.cc)
+file(GLOB_RECURSE RENDERER_HEADERS renderer/*.h)
+file(GLOB_RECURSE RESOURCES_SOURCES resources/*.cc)
+file(GLOB_RECURSE RESOURCES_HEADERS resources/*.h)
+
 ######################################################
 
 # Platform-specific settings - have to first check for MSYS/MinGW or else it'll think it's UNIX type
-if (WIN32 OR MSYS OR MINGW)
+if(Windows OR WIN32 OR MSYS OR MINGW OR OS_WINDOWS)
     message(STATUS "Configuring for Windows")
 
     # Get the environment variable
@@ -103,10 +127,14 @@ if (WIN32 OR MSYS OR MINGW)
     message(STATUS "CEF_BIN_PATH_WIN is set to '${CEF_BIN_PATH_WIN}' ($ENV{CEF_BIN_PATH_WIN})")
 
     # append Windows specific source
-    #list(APPEND SOURCES my_win_lib.cpp)
+    list(APPEND SOURCES 
+            ./testapp_win.cpp
+    )
 
     #target_compile_definitions(${PROJECT_NAME} PRIVATE -D_WINDOWS)
-elseif (UNIX AND NOT APPLE)
+    file(GLOB_RECURSE WIN_SOURCES win/*.cc)
+    file(GLOB_RECURSE WIN_HEADERS win/*.h)
+elseif(Linux OR ( UNIX AND NOT APPLE) OR OR_LINUX)
     message(STATUS "Configuring for Linux (including WSL2)")
 
     # Get the environment variable
@@ -121,8 +149,10 @@ elseif (UNIX AND NOT APPLE)
     message(STATUS "CEF_BIN_PATH_LIN is set to '${CEF_BIN_PATH_LIN}' ($ENV{CEF_BIN_PATH_LIN})")
 
     # append Linux specific source
-    #list(APPEND SOURCES my_linux_lib.cpp)
-elseif (APPLE)
+    list(APPEND SOURCES 
+            ./testapp_lin.cpp
+    )
+elseif(Darwin OR APPLE OR OS_MAC)
     message(STATUS "Configuring for macOS")
 
     # Get the environment variable
@@ -137,8 +167,13 @@ elseif (APPLE)
     message(STATUS "CEF_BIN_PATH_MAC is set to '${CEF_BIN_PATH_MAC}' ($ENV{CEF_BIN_PATH_MAC})")
 
     # append macOS specific source (OBJCXX)
-    list(APPEND SOURCES my_internal_lib.mm)
+    list(APPEND SOURCES 
+	    my_internal_lib.mm
+            ./testapp_mac.mm
+    )
 
+    file(GLOB_RECURSE MAC_SOURCES mac/*.cc)
+    file(GLOB_RECURSE MAC_HEADERS mac/*.h)
 else()
     message(FATAL_ERROR "Unsupported platform")
 endif()
@@ -147,7 +182,12 @@ list(APPEND CMAKE_MODULE_PATH ${CEF_ROOT}/cmake)
 
 # Include directories based on ${CEF_BIN_PATH_XXX}/include"
 include_directories(${CEF_ROOT} ${CEF_ROOT}/include ./ ./src ./include)
-link_directories(${CEF_ROOT}/Release ./Release ${CMAKE_BINARY_DIR}/lib ${CMAKE_BINARY_DIR}/bin)
+link_directories(
+    ${CEF_ROOT}/Release 
+    ./Release 
+    ${CMAKE_BINARY_DIR}/lib 
+    ${CMAKE_BINARY_DIR}/bin)
+
 
 # Note: link_directories() is for link-time usage, while CMAKE_LIBRARY_PATH is for cmake to search for packages
 message(STATUS "INCLUDE paths: ${CMAKE_INCLUDE_PATH}")
@@ -178,29 +218,47 @@ message(STATUS "CEF_ROOT: ${CEF_ROOT}")
 add_library( ${MY_EXTERNAL_LIB} STATIC 
     my_external_lib.cpp 
     my_external_lib.h)
-# Set the output directories for your targets (has to be set AFTER add_library() call)
-set_target_properties( ${MY_EXTERNAL_LIB} PROPERTIES 
-    ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib
-    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib
-    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}
-)
-# PROJECT_NAME will be the executable name (i.e. "MySampleCEFTestApp_Src.exe")
-# source files relative to THIS CMakeLists.txt file...
-set(SOURCES
-    ./main.cpp
-    ./my_internal_lib.cpp
-)
-add_executable(${PROJECT_NAME} ${SOURCES})
-if (WIN32 OR MSYS OR MINGW)
+## Set the output directories for your targets (has to be set AFTER add_library() call)
+#set_target_properties( ${MY_EXTERNAL_LIB} PROPERTIES 
+#    ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib
+#    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib
+#    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}
+#)
+
+add_executable( 
+    ${PROJECT_NAME} ${SOURCES} 
+    ${COMMON_SOURCES} ${COMMON_HEADERS} 
+    ${BROWSER_MAC_SOURCES}
+    ${RENDERER_SOURCES} ${RENDERER_HEADERS} 
+    ${RESOURCES_SOURCES} ${RESOURCES_HEADERS}
+    ) 
+
+if(Windows OR WIN32 OR MSYS OR MINGW OR OS_WINDOWS)
     # NOTE: if you declare explicitly (i.e. 'libcef.lib'), CMake will auto-relace with '-lcef' for 'libcef.lib'
     #target_link_libraries(${PROJECT_NAME} PRIVATE ${MY_EXTERNAL_LIB} libcef.lib)
-    target_link_libraries(${PROJECT_NAME} PRIVATE ${MY_EXTERNAL_LIB} cef)
+    target_link_libraries(${PROJECT_NAME} PRIVATE 
+        stdc++
+        ${MY_EXTERNAL_LIB} 
+        libcef_dll_wrapper.a
+        cef)
     target_compile_definitions(${PROJECT_NAME} PRIVATE -D_WINDOWS)
-elseif (UNIX AND NOT APPLE)
+elseif(Linux OR ( UNIX AND NOT APPLE) OR OR_LINUX)
     # NOTE: it'll compile "my_internal_lib.cpp" as "my_internal_lib.cpp.o"
-    target_link_libraries(${PROJECT_NAME} PRIVATE ${MY_EXTERNAL_LIB} cef)
-elseif (APPLE)
-    target_link_libraries(${PROJECT_NAME} PRIVATE "-framework Foundation" ${MY_EXTERNAL_LIB} cef)
+    target_link_libraries(${PROJECT_NAME} PRIVATE 
+        -static-libstdc++
+        ${MY_EXTERNAL_LIB} 
+        libcef_dll_wrapper.a
+        cef)
+elseif(Darwin OR APPLE OR OS_MAC)
+    target_link_libraries(${PROJECT_NAME} PRIVATE 
+        c++
+        "-framework Foundation" 
+        "-framework AppKit" 
+        "-framework Cocoa" 
+        ${MY_EXTERNAL_LIB} 
+        libcef.dylib
+        libcef_dll_wrapper.a
+        )
     #target_link_libraries(HelloWorld
     #    "-framework Foundation"
     #)

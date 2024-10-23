@@ -9,12 +9,22 @@ set(CMAKE_BUILD_TYPE Release)
 set(CMAKE_C_COMPILER $ENV{CC})
 set(CMAKE_CXX_COMPILER $ENV{CXX})
 project(ProjectRoot)
-message(STATUS "#################################### ${PROJECT_NAME}")
+message(STATUS "#################################### ${CMAKE_SYSTEM_NAME}: ${CMAKE_HOST_SYSTEM_NAME}-${CMAKE_HOST_SYSTEM_VERSION} - ${PROJECT_NAME}")
+
+if("${CMAKE_BINARY_DIR}" STREQUAL "")
+    message(FATAL_ERROR "CMAKE_BINARY_DIR is empty. Please specify a valid build directory.")
+endif()
+
+if (CMAKE_SOURCE_DIR STREQUAL CMAKE_BINARY_DIR)
+    message(FATAL_ERROR "CMake must be run from outside the source directory")
+endif()
 
 #set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
 # Platform-specific configurations and triplets
-if(WIN32 OR MSYS OR MINGW)
+# See: https://cmake.org/cmake/help/latest/variable/CMAKE_HOST_SYSTEM_NAME.html#variable:CMAKE_HOST_SYSTEM_NAME
+# See also: https://cmake.org/cmake/help/latest/variable/CMAKE_SYSTEM_NAME.html
+if(Windows OR WIN32 OR MSYS OR MINGW OR OS_WINDOWS)
     #NOTE: for UCRT64, you use "Windows" instead of "MinGW"
     #set(VCPKG_TARGET_TRIPLET "x64-mingw-static")
     set(VCPKG_TARGET_TRIPLET "x64-windows-static")
@@ -26,7 +36,7 @@ if(WIN32 OR MSYS OR MINGW)
         message(FATAL_ERROR "CEF_BIN_PATH_WIN environment variable is not set")
     endif()
     set(CEF_ROOT ${CMAKE_SOURCE_DIR}/${CEF_BIN_PATH_WIN})
-elseif(UNIX AND NOT APPLE)
+elseif(Linux OR ( UNIX AND NOT APPLE) OR OR_LINUX)
     set(VCPKG_TARGET_TRIPLET "x64-linux-static")
     set(CMAKE_INSTALL_PREFIX "/usr/local")
 
@@ -37,7 +47,7 @@ elseif(UNIX AND NOT APPLE)
         message(FATAL_ERROR "CEF_BIN_PATH_LIN environment variable is not set")
     endif()
     set(CEF_ROOT ${CMAKE_SOURCE_DIR}/${CEF_BIN_PATH_LIN})
-elseif(APPLE)
+elseif(Darwin OR APPLE OR OS_MAC)
     set(VCPKG_TARGET_TRIPLET "x64-mac-static")
     set(CMAKE_MACOSX_RPATH ON)
     set(CMAKE_OSX_DEPLOYMENT_TARGET "10.15")
@@ -49,7 +59,7 @@ elseif(APPLE)
         message(FATAL_ERROR "CEF_BIN_PATH_MAC environment variable is not set")
     endif()
     set(CEF_ROOT ${CMAKE_SOURCE_DIR}/${CEF_BIN_PATH_MAC})
-lse()
+else()
     message(FATAL_ERROR "Unsupported platform")
 endif()
 
@@ -112,8 +122,25 @@ else()
 endif()
 message(STATUS "VCPKG_ROOT: ${VCPKG_ROOT}")
 
+# Configure build directories has to be set BEFORE add_subdirectories() so that the output binaries are placed in the correct directories
+# This is so that you don't have to do `set_target_properties( ${MY_EXTERNAL_LIB} PROPERTIES ... )` for each library
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+
+message(STATUS "CMAKE_SOURCE_DIR: ${CMAKE_SOURCE_DIR}")
+message(STATUS "CMAKE_BINARY_DIR (OUTPUT): ${CMAKE_BINARY_DIR}")
+message(STATUS "CMAKE_RUNTIME_OUTPUT_DIRECTORY: ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
+message(STATUS "CMAKE_ARCHIVE_OUTPUT_DIRECTORY: ${CMAKE_ARCHIVE_OUTPUT_DIRECTORY}")
+message(STATUS "CMAKE_LIBRARY_OUTPUT_DIRECTORY: ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}")
+message(STATUS "CEF_ROOT dir: ${CEF_ROOT}")
+message(STATUS "VCPKG_ROOT: ${VCPKG_ROOT}")
+
 # Add the directory containing your custom modules
 list(APPEND CMAKE_MODULE_PATH "${CEF_ROOT}/cmake")
+
+# Include directories
+include_directories(${CMAKE_SOURCE_DIR}/src ./ ./include ${CEF_ROOT}/include)
 
 # Process the template file
 configure_file(
@@ -131,10 +158,9 @@ configure_file(
     @ONLY
 )
 
-# Include directories
-include_directories(${CMAKE_SOURCE_DIR}/src ./ ./include ${CEF_ROOT}/include)
-
-# Add the source files
-add_subdirectory(./src ${CMAKE_SOURCE_DIR}/src)
+# Finally, add the source files with all the configurations and ENV variables set...
+# It is NOT a typo to add ${CMAKE_BINARY_DIR}/src instead of ${CMAKE_SOURCE_DIR}/src, this prevents
+# the "CMakeFiles" directories from being created in the source directory!
+add_subdirectory(./src ${CMAKE_BINARY_DIR}/src)
 
 message(STATUS "#################################### ${PROJECT_NAME} done")

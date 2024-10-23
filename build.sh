@@ -1,10 +1,12 @@
 #!/bin/bash
 
 # NOTE: I could do `uname` to check to see if it's MSYS but it's harmless to define MSYSTEM on Linux and/or macOS so we'll just export it...
-_BUILD_TYPE=Release
-_BUILD_DIR="build"
+_BUILD_TYPE=${1:-Release}
+_BUILD_DIR=${2:-build}
 
 [ -e bin ] || ./get-binaries.sh ${_BUILD_TYPE}
+[ -e .env.local ] || ./get-binaries.sh ${_BUILD_TYPE}
+[ -e ${CEF_BIN_PATH_MAC}/Release/libcef.dylib ] || ./get-binaries.sh ${_BUILD_TYPE}
 
 cat .env.local
 source .env.local
@@ -21,15 +23,30 @@ export CMAKE_C_COMPILER="$(which clang)"
 export CC="$(which clang)"
 export VCPKG_ROOT=$(dirname $(which vcpkg))
 export CMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake
-export CMAKE_MAKE_PROGRAM="$(which ninja)"
-_GENERATOR="Ninja Multi-Config"
+
+# See: https://cmake.org/cmake/help/latest/variable/CMAKE_MAKE_PROGRAM.html#variable:CMAKE_MAKE_PROGRAM
+# See also: https://cmake.org/cmake/help/latest/guide/user-interaction/index.html
+# - Ninja Multi-Config: "Ninja Multi-Config"
+# - Unix Makefiles: "Unix Makefiles"
+# - Ninja: "Ninja"
+# - Visual Studio: "Visual Studio 16 2019"
+# - Xcode: "Xcode"
+#_GENERATOR=#"Ninja Multi-Config"
 _GENERATOR="Unix Makefiles"
+if [ "$_GENERATOR" == "Ninja Multi-Config" ] ; then
+    export CMAKE_MAKE_PROGRAM="$(which ninja)"
+elif [ "$_GENERATOR" == "Unix Makefiles" ]; then
+    export CMAKE_MAKE_PROGRAM="$(which make)"
+fi
 
 if [ "$VCPKG_ROOT" == "" ] ; then
 	echo "Install vcpkg first!" 
 	exit -1
 fi
 
+vcpkg install \
+    vcpkg-tool-ninja \
+    vcpkg-cmake vcpkg-cmake-config vcpkg-cmake-get-vars    
 echo "##################################"
 $CXX --version
 cmake --version
@@ -98,9 +115,9 @@ elif [ "${_OS}" == "Msys" ]; then
 elif [ "${_OS}" == "Darwin" ]; then
     echo "Setting up for macOS..."
     _BUILD_DIR="${_BUILD_DIR}.macos"
-    export VCPKG_TARGET_TRIPLET="x64-mac-static"
-    export VCPKG_DEFAULT_TRIPLET="x64-mac-static"
-    export VCPKG_DEFAULT_HOST_TRIPLET="x64-mac-static"
+    export VCPKG_TARGET_TRIPLET="arm64-osx-dynamic"
+    export VCPKG_DEFAULT_TRIPLET="arm64-osx-dynamic"
+    export VCPKG_DEFAULT_HOST_TRIPLET="arm64-osx-dynamic"
     export CMAKE_INCLUDE_PATH="${CMAKE_INCLUDE_PATH}:./src:${CEF_BIN_PATH_MAC}/include:."
     export CEF_ROOT=$(pwd)/${CEF_BIN_PATH_MAC}
     export CEF_ROOT=${CEF_BIN_PATH_MAC}
