@@ -23,6 +23,7 @@ export CC="$(which clang)"
 export VCPKG_ROOT=$(dirname $(which vcpkg))
 export CMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake
 export CMAKE_MAKE_PROGRAM="$(which ninja)"
+#export CMAKE_MAKE_PROGRAM="$(which make)"
 
 if [ "$VCPKG_ROOT" == "" ] ; then
 	echo "Install vcpkg first!" 
@@ -37,9 +38,11 @@ vcpkg list
 echo "##################################"
 
 _GENERATOR="Ninja Multi-Config"
+#_GENERATOR="Unix Makefiles"
 if [ "${_OS}" == "GNU/Linux" ]; then
     echo "Setting up for Linux..."
     _GENERATOR="Ninja Multi-Config"
+#_GENERATOR="Unix Makefiles"
     _BUILD_DIR="${_BUILD_DIR}.linux"
     export VCPKG_TARGET_TRIPLET="x64-linux-static"
     export VCPKG_DEFAULT_TRIPLET="x64-linux-static"
@@ -51,6 +54,7 @@ elif [ "${_OS}" == "Msys" ]; then
     echo "Setting up for MSYS64/MinGW Windows (via ${MSYSTEM})..."
     export PATH=/c/msys64/ucrt64/bin:$PATH  # prepend ucrt64 search paths first, so $(which) will choose Universal CRT for Windows target
     _GENERATOR="Ninja Multi-Config"
+#_GENERATOR="Unix Makefiles"
     _BUILD_DIR="${_BUILD_DIR}.win.msys"
     #NOTE: for UCRT64, you use "Windows" instead of "MinGW"
     #export VCPKG_TARGET_TRIPLET="x64-mingw-static"
@@ -67,12 +71,14 @@ elif [ "${_OS}" == "Msys" ]; then
     export CC=$(which clang.exe)
     export CMAKE_C_COMPILER="${CC}"
     export CMAKE_MAKE_PROGRAM="$(which ninja.exe)"
+#export CMAKE_MAKE_PROGRAM="$(which make.exe)"
 
     export CEF_ROOT=$(pwd)/${CEF_BIN_PATH_WIN}
     export CEF_ROOT=${CEF_BIN_PATH_WIN}
 elif [ "${_OS}" == "Darwin" ]; then
     echo "Setting up for macOS..."
     _GENERATOR="Ninja Multi-Config"
+#_GENERATOR="Unix Makefiles"
     _BUILD_DIR="${_BUILD_DIR}.macos"
     export VCPKG_TARGET_TRIPLET="x64-mac-static"
     export VCPKG_DEFAULT_TRIPLET="x64-mac-static"
@@ -89,8 +95,8 @@ if [ "${_FOUND}" == "" ] ; then echo "Unable to find VCPKG_TARGET_TRIPLET='$VCPK
 [ -e ${_BUILD_DIR} ] || mkdir -p "${_BUILD_DIR}"
 export | sort | grep --color=auto "CMAKE\|VCPKG\|CXX\|CC\|CEF"
 
-cmake \
--DCMAKE_BUILD_TYPE:STRING=${_BUILD_TYPE}     \
+cmake --log-level DEBUG \
+    -DCMAKE_BUILD_TYPE:STRING=${_BUILD_TYPE}     \
     -DCXX:STRING=${CXX}     \
     -DCMAKE_CXX_COMPILER:STRING=${CMAKE_CXX_COMPILER} 	\
     -DCC:STRING=${CC}   \
@@ -104,9 +110,9 @@ cmake \
     -DCEF_ROOT:STRING=${CEF_ROOT}   \
     --no-warn-unused-cli \
     -B "${_BUILD_DIR}" \
-    -G "${_GENERATOR}"
-echo
-
-echo "Switching to ${_BUILD_DIR} to ninja..."
-cd "${_BUILD_DIR}"
-ninja
+    -G "${_GENERATOR}"  \
+    -S .
+echo "Switching to ${_BUILD_DIR} to ninja-make..."
+# cd ${_BUILD_DIR}
+# ninja
+cmake --build "${_BUILD_DIR}" --config ${_BUILD_TYPE} 

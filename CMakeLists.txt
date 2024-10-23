@@ -1,12 +1,13 @@
-cmake_minimum_required(VERSION 3.16)
+cmake_minimum_required(VERSION 3.30)
 
 # Set the C++ standard
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
+set(CMAKE_BUILD_TYPE Release)
 
 set(CMAKE_C_COMPILER $ENV{CC})
 set(CMAKE_CXX_COMPILER $ENV{CXX})
-#project(MySampleCEFTestApp_Root)
+project(ProjectRoot)
 message(STATUS "#################################### ${PROJECT_NAME}")
 
 # Platform-specific configurations and triplets
@@ -132,3 +133,5 @@ include_directories(${CMAKE_SOURCE_DIR}/src ./ ./include ${CEF_ROOT}/include)
 
 # Add the source files
 add_subdirectory(./src ${CMAKE_SOURCE_DIR}/src)
+
+message(STATUS "#################################### ${PROJECT_NAME} done")

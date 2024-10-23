@@ -1,15 +1,20 @@
 # NOTE: In vSCode "settings.json", set your settings as:
 # - "cmake.sourceDirectory": "${workspaceFolder}/src",
 # - "cmake.generator": "Ninja Multi-Config"
-cmake_minimum_required(VERSION 3.16)
+cmake_minimum_required(VERSION 3.30)
 
 # Set the C++ standard
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 set(CMAKE_C_COMPILER $ENV{CC})
 set(CMAKE_CXX_COMPILER $ENV{CXX})
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
+set(CMAKE_BUILD_TYPE Release)
 project(MySampleCEFTestApp_Src)
 message(STATUS "#################################### ${PROJECT_NAME}")
+message(STATUS "SOURCE: ${CMAKE_SOURCE_DIR}")
+message(STATUS "DEST (Output): ${CMAKE_BINARY_DIR}")
+message(STATUS "CMAKE_RUNTIME_OUTPUT_DIRECTORY: ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
 
 # Check if the C and C++ compilers are set in the environment variables
 if(DEFINED ENV{CC})
@@ -44,7 +49,6 @@ message(STATUS "ENV{CXX} set to '$ENV{CXX}' -> '${CMAKE_CXX_COMPILER}'")
 
 if(DEFINED ENV{VCPKG_ROOT})
     set(VCPKG_ROOT $ENV{VCPKG_ROOT})
-    set(VCPKG_TARGET_TRIPLET $ENV{VCPKG_TARGET_TRIPLET})
 else()
     execute_process(COMMAND dirname $(which vcpkg) OUTPUT_VARIABLE VCPKG_ROOT OUTPUT_STRIP_TRAILING_WHITESPACE)
     if(VCPKG_ROOT)
@@ -55,6 +59,18 @@ else()
 endif()
 message(STATUS "VCPKG_ROOT: ${VCPKG_ROOT}")
 
+if(DEFINED ENV{VCPKG_TARGET_TRIPLET})
+    set(VCPKG_TARGET_TRIPLET $ENV{VCPKG_TARGET_TRIPLET})
+else()
+    execute_process(COMMAND dirname $(which vcpkg) OUTPUT_VARIABLE VCPKG_TARGET_TRIPLET OUTPUT_STRIP_TRAILING_WHITESPACE)
+    if(VCPKG_TARGET_TRIPLET)
+        set(VCPKG_TARGET_TRIPLET ${VCPKG_TARGET_TRIPLET})
+    else()
+        message(FATAL_ERROR "Unable to locate vcpkg, please install it first")
+    endif()
+endif()
+message(STATUS "VCPKG_TARGET_TRIPLET: ${VCPKG_TARGET_TRIPLET}")
+
 if (CMAKE_SYSTEM_NAME STREQUAL "Linux" OR CMAKE_SYSTEM_NAME STREQUAL "Windows")
     message(STATUS "Configuring for Linux or Windows")
 elseif (CMAKE_SYSTEM_NAME STREQUAL "Darwin")
@@ -63,15 +79,12 @@ else()
     message(STATUS "Unknown/Unhandled CMAKE_SYSTEM_NAME")
 endif()
 
-#include_directories(${PROJECT_SOURCE_DIR}/include)
 
+######################################################
 # If we have other custom libraries that needs to be built first and linked as separate library:
-add_library(my_external_lib STATIC my_external_lib.cpp my_external_lib.h)
+set(MY_EXTERNAL_LIB "my_external_lib")
 
-# Source files (shared by ALL platforms)
-set(SOURCES
-    ./main.cpp
-)
+######################################################
 
 # Platform-specific settings - have to first check for MSYS/MinGW or else it'll think it's UNIX type
 if (WIN32 OR MSYS OR MINGW)
@@ -89,18 +102,9 @@ if (WIN32 OR MSYS OR MINGW)
     message(STATUS "CEF_BIN_PATH_WIN is set to '${CEF_BIN_PATH_WIN}' ($ENV{CEF_BIN_PATH_WIN})")
 
     # append Windows specific source
-    list(APPEND SOURCES my_internal_lib.cpp)
-    list(APPEND CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/${CEF_BIN_PATH_WIN}/cmake)
+    #list(APPEND SOURCES my_win_lib.cpp)
 
-    # Include directories based on ${CEF_BIN_PATH_XXX}/include"
-    include_directories(${CMAKE_SOURCE_DIR}/${CEF_BIN_PATH_WIN} ../${CEF_BIN_PATH_WIN} ${CEF_BIN_PATH_WIN}/include ./ ./src ./include)
-    link_directories(${CMAKE_SOURCE_DIR}/${CEF_BIN_PATH_WIN}/Release ../${CEF_BIN_PATH_WIN}/Release ${CEF_BIN_PATH_WIN}/Release ./Release)
-
-    add_executable(${PROJECT_NAME} ${SOURCES})
-
-    # NOTE: if you declare explicitly (i.e. 'libcef.lib'), CMake will auto-relace with '-lcef' for 'libcef.lib'
-    target_link_libraries(${PROJECT_NAME} PRIVATE my_external_lib libcef.lib)
-    target_compile_definitions(${PROJECT_NAME} PRIVATE -D_WINDOWS)
+    #target_compile_definitions(${PROJECT_NAME} PRIVATE -D_WINDOWS)
 elseif (UNIX AND NOT APPLE)
     message(STATUS "Configuring for Linux (including WSL2)")
 
@@ -116,18 +120,7 @@ elseif (UNIX AND NOT APPLE)
     message(STATUS "CEF_BIN_PATH_LIN is set to '${CEF_BIN_PATH_LIN}' ($ENV{CEF_BIN_PATH_LIN})")
 
     # append Linux specific source
-    list(APPEND SOURCES my_internal_lib.cpp)
-    list(APPEND CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/${CEF_BIN_PATH_LIN}/cmake)
-
-    # Include directories based on ${CEF_BIN_PATH_XXX}/include"
-    include_directories(${CMAKE_SOURCE_DIR}/${CEF_BIN_PATH_LIN} ../${CEF_BIN_PATH_LIN} ${CEF_BIN_PATH_LIN}/include ./ ./src ./include)
-    link_directories(${CMAKE_SOURCE_DIR}/${CEF_BIN_PATH_LIN}/Release ../${CEF_BIN_PATH_LIN}/Release ${CEF_BIN_PATH_LIN}/Release ./Release)
-
-    # add_executable(MyExecutable ${CEF_BIN_PATH_LIN}/some_binary)
-    add_executable(${PROJECT_NAME} ${SOURCES})
-
-    # NOTE: it'll compile "my_internal_lib.cpp" as "my_internal_lib.cpp.o"
-    target_link_libraries(${PROJECT_NAME} PRIVATE my_external_lib libcef.lib)
+    #list(APPEND SOURCES my_linux_lib.cpp)
 elseif (APPLE)
     message(STATUS "Configuring for macOS")
 
@@ -144,24 +137,55 @@ elseif (APPLE)
 
     # append macOS specific source (OBJCXX)
     list(APPEND SOURCES my_internal_lib.mm)
-    list(APPEND CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/${CEF_BIN_PATH_MAC}/cmake)
 
-    # Include directories based on ${CEF_BIN_PATH_XXX}/include"
-    include_directories(${CMAKE_SOURCE_DIR}/${CEF_BIN_PATH_MAC} ../${CEF_BIN_PATH_MAC} ${CEF_BIN_PATH_MAC}/include ./ ./src ./include)
-    link_directories(${CMAKE_SOURCE_DIR}/${CEF_BIN_PATH_MAC}/Release ../${CEF_BIN_PATH_MAC}/Release ${CEF_BIN_PATH_MAC}/Release ./Release)
-
-    add_executable(${PROJECT_NAME} ${SOURCES})
-    #add_executable(HelloWorld hello.mm main.cpp)
-
-    target_link_libraries(${PROJECT_NAME} PRIVATE "-framework Foundation" my_external_lib libcef.dylib)
-    #target_link_libraries(HelloWorld
-    #    "-framework Foundation"
-    #)
 else()
     message(FATAL_ERROR "Unsupported platform")
 endif()
 
+list(APPEND CMAKE_MODULE_PATH ${CEF_ROOT}/cmake)
+
+# Include directories based on ${CEF_BIN_PATH_XXX}/include"
+include_directories(${CEF_ROOT} ${CEF_ROOT}/include ./ ./src ./include)
+link_directories(${CEF_ROOT}/Release ./Release ${CMAKE_BINARY_DIR}/lib ${CMAKE_BINARY_DIR}/bin)
+
+# Note: link_directories() is for link-time usage, while CMAKE_LIBRARY_PATH is for cmake to search for packages
 message(STATUS "INCLUDE paths: ${CMAKE_INCLUDE_PATH}")
-message(STATUS "LINK paths: ${CMAKE_LIBRARY_PATH}")
-message(STATUS "VCPKG: ${VCPKG_TARGET_TRIPLET}")
+message(STATUS "Package library paths: ${CMAKE_LIBRARY_PATH}")
+message(STATUS "VCPKG triplet: ${VCPKG_TARGET_TRIPLET}")
 message(STATUS "CEF_ROOT: ${CEF_ROOT}")
+
+######################################################
+# If we have other custom libraries that needs to be built first and linked as separate library:
+add_library( ${MY_EXTERNAL_LIB} STATIC 
+    my_external_lib.cpp 
+    my_external_lib.h)
+# Set the output directories for your targets (has to be set AFTER add_library() call)
+set_target_properties( ${MY_EXTERNAL_LIB} PROPERTIES 
+    ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}
+)
+# PROJECT_NAME will be the executable name (i.e. "MySampleCEFTestApp_Src.exe")
+# source files relative to THIS CMakeLists.txt file...
+set(SOURCES
+    ./main.cpp
+    ./my_internal_lib.cpp
+)
+add_executable(${PROJECT_NAME} ${SOURCES})
+if (WIN32 OR MSYS OR MINGW)
+    # NOTE: if you declare explicitly (i.e. 'libcef.lib'), CMake will auto-relace with '-lcef' for 'libcef.lib'
+    #target_link_libraries(${PROJECT_NAME} PRIVATE ${MY_EXTERNAL_LIB} libcef.lib)
+    target_link_libraries(${PROJECT_NAME} PRIVATE ${MY_EXTERNAL_LIB} cef)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE -D_WINDOWS)
+elseif (UNIX AND NOT APPLE)
+    # NOTE: it'll compile "my_internal_lib.cpp" as "my_internal_lib.cpp.o"
+    target_link_libraries(${PROJECT_NAME} PRIVATE ${MY_EXTERNAL_LIB} cef)
+elseif (APPLE)
+    target_link_libraries(${PROJECT_NAME} PRIVATE "-framework Foundation" ${MY_EXTERNAL_LIB} cef)
+    #target_link_libraries(HelloWorld
+    #    "-framework Foundation"
+    #)
+endif()
+######################################################
+
+message(STATUS "#################################### ${PROJECT_NAME} done")
