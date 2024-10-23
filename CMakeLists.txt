@@ -3,12 +3,15 @@ cmake_minimum_required(VERSION 3.30)
 # Set the C++ standard
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
+set(CMAKE_CONFIGURATION_TYPES Debug Release)
 set(CMAKE_BUILD_TYPE Release)
 
 set(CMAKE_C_COMPILER $ENV{CC})
 set(CMAKE_CXX_COMPILER $ENV{CXX})
 project(ProjectRoot)
 message(STATUS "#################################### ${PROJECT_NAME}")
+
+#set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
 # Platform-specific configurations and triplets
 if(WIN32 OR MSYS OR MINGW)

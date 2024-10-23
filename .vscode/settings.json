@@ -1,6 +1,6 @@
 {
     "cmake.sourceDirectory": "${workspaceFolder}/src",
-    "cmake.generator": "Ninja Multi-Config",
+    "cmake.generator": "Unix Makefiles",
     "C_Cpp.default.includePath": [".", "./src", "../bin/cef_linux64/", "./bin/cef_linux64/", "../bin/cef_windows64", "./bin/cef_windows64", "../bin/cef_macosarm64", "./bin/cef_macosarm64"],
     "terminal.integrated.env.windows": {
         "CXX": "clang++.exe",

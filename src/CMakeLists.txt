@@ -9,6 +9,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 set(CMAKE_C_COMPILER $ENV{CC})
 set(CMAKE_CXX_COMPILER $ENV{CXX})
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
+set(CMAKE_CONFIGURATION_TYPES Debug Release)
 set(CMAKE_BUILD_TYPE Release)
 project(MySampleCEFTestApp_Src)
 message(STATUS "#################################### ${PROJECT_NAME}")
@@ -153,6 +154,24 @@ message(STATUS "INCLUDE paths: ${CMAKE_INCLUDE_PATH}")
 message(STATUS "Package library paths: ${CMAKE_LIBRARY_PATH}")
 message(STATUS "VCPKG triplet: ${VCPKG_TARGET_TRIPLET}")
 message(STATUS "CEF_ROOT: ${CEF_ROOT}")
+
+#######################################################
+## Group target contents by directory.
+#macro(SET_SOURCE_GROUPS srcs)
+#    foreach(FILE ${srcs}) 
+#        # Get the absolute directory path.
+#        get_filename_component(ABS_FILE "${FILE}" ABSOLUTE)
+#        get_filename_component(PARENT_DIR "${ABS_FILE}" DIRECTORY)
+#
+#        # Remove the common directory prefix. What remains in the group.
+#        string(REPLACE "${CMAKE_SOURCE_DIR}/src/" "" GROUP "${PARENT_DIR}")
+#
+#        # Convert to Windows slashes.
+#        string(REPLACE "/" "\\" GROUP "${GROUP}")
+#
+#        source_group("${GROUP}" FILES "${FILE}")
+#    endforeach()
+#endmacro()
 
 ######################################################
 # If we have other custom libraries that needs to be built first and linked as separate library:
