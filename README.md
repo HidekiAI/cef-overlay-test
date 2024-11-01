@@ -107,6 +107,8 @@ Lastly, you want to make sure VSCode can find your Universal CRT compiler (`clan
 
 ![VSCode CMake](./VSCode-cmake-UCRT64.png)
 
+TODO: [MS BuildTools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) License Agreement now allows 3rd party libraries to be compiled and linked without fees for Enterprise Developers without need to install Visual Studios Community (which disallows Enterprise/Commercial usage for building)
+
 ### `bash` and other Unix/Linux CLI commands
 
 One issue about this project is that (as mentioned above), I am *VERY* `bash` (Linux CLI command) biased.  You *MUST* make sure one way or another, for even VSCode to be able to access `bash` because you will see logics even in `CMakeLists.txt` (`cmake`) build logic like this:
