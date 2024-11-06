@@ -1,5 +1,5 @@
 #!/bin/bash
-_BUILD_TYPE=${1:-${_BUILD_TYPE}}
+_BUILD_TYPE=${1:-Release}
 if [ -e $(which wget) ]; then
     echo "wget is installed"
 else
@@ -40,9 +40,13 @@ _CEF_VERSION="129.0.11+g57354b8+chromium-129.0.6668.90"
 find . -type d -name "Debug" -exec rm -rf {} \;
 
 # Rename long file-paths to shorter ones (using symbolic links) and assumes it'll work on all OS
-ln -svf cef_binary_${_CEF_VERSION}_macosarm64 cef_macosarm64
 ln -svf cef_binary_${_CEF_VERSION}_windows64 cef_windows64
 ln -svf cef_binary_${_CEF_VERSION}_linux64 cef_linux64
+ln -svf cef_binary_${_CEF_VERSION}_macosarm64 cef_macosarm64
+
+# Some dirs commonly used by CMakeLists.txt, mainly when it tries to look for "${CMAKE_SOURCE_DIR}/cef_<platform_os>/cmake" file
+# Note that for cef_linux64 and cef_windows64, 
+[ ! -e cef_macos64 ] || ln -svf cef_macosarm64 cef_macos64
 
 ## show all the binaries we're interested in...
 #find . -type f -perm -111      # NOTE: Unfortunately, on Windows, it will force ALL files to be executable (including header files due to NTFS characteristics)
@@ -76,44 +80,68 @@ _OS=$(uname -o)
 
 # Finally, we NEED "cef_wrapper_dll" for the "cefclient" to work
 pushd .
-cd ..   # we're already in "bin" directory, so go up one level so when we cd to $CEF_BIN_PATH_XXX, it's correct
 if [ "${_OS}" == "GNU/Linux" ]; then
+    CEF_ROOT=$(pwd)/${CEF_BIN_PATH_LIN}	
+    cd ${CEF_ROOT}
     echo "Setting up for Linux..."
     _TARGET="libcef_dll_wrapper.a"
-    cd ${CEF_BIN_PATH_LIN}
     # Look for "${CEF_BIN_PATH_LIN}/build/libcef_dll_wrapper/libcef_dll_wrapper.a"
     if ! [ -e "build/libcef_dll_wrapper/${_TARGET}" ]; then
         [ -e build ] || mkdir build
-        cd build
-        cmake -G "Unix Makefiles" ..
-        make && find . -name "${_TARGET}" -exec cp {} ../${_BUILD_TYPE}/ \;
+        cmake -G "Unix Makefiles" -B build -S .
+	_RET=$?
+
+	cmake --build build --config ${_BUILD_TYPE}
+	_RET=$?
+
+        find . -name "${_TARGET}" -exec cp {} ${_BUILD_TYPE}/ \;
+    else
+	echo "Already built: ${_TARGET}"
+	ls -lAh "build/libcef_dll_wrapper/${_TARGET}"
     fi
 elif [ "${_OS}" == "Msys" ]; then
+    CEF_ROOT=$(pwd)/${CEF_BIN_PATH_WIN}	
+    cd ${CEF_ROOT}
     export MSYSTEM=CLANG64
     echo "Setting up for MSYS64/MinGW Windows (via ${MSYSTEM})..."
     # NOTE: CEF is Visual Studios/MSBuild based so maybe it's ".lib" instead?
     _TARGET="libcef_dll_wrapper.a"
-    cd ${CEF_BIN_PATH_WIN}
     # Look for "${CEF_BIN_PATH_WIN}/build/libcef_dll_wrapper/libcef_dll_wrapper.lib"
     if ! [ -e "build/libcef_dll_wrapper/${_TARGET}" ]; then
         [ -e build ] || mkdir build
-        cd build
-        cmake -G "Unix Makefiles" ..
-        make && find . -name "${_TARGET}" -exec cp {} ../${_BUILD_TYPE}/ \;
+        cmake -G "Unix Makefiles" -B build -S .
+	_RET=$?
+
+	cmake --build build --config ${_BUILD_TYPE}
+	_RET=$?
+
+        find . -name "${_TARGET}" -exec cp {} ${_BUILD_TYPE}/ \;
+    else
+	echo "Already built: ${_TARGET}"
+	ls -lAh "build/libcef_dll_wrapper/${_TARGET}"
     fi
 elif [ "${_OS}" == "Darwin" ]; then
+    CEF_ROOT=$(pwd)/${CEF_BIN_PATH_MAC}	
+    cd ${CEF_ROOT}
     echo "Setting up for macOS..."
-    cd ${CEF_BIN_PATH_MAC}
     _TARGET="libcef_dll_wrapper.a"
     # Look for "${CEF_BIN_PATH_MAC}/build/libcef_dll_wrapper/libcef_dll_wrapper.a"
     if ! [ -e "build/libcef_dll_wrapper/${_TARGET}" ]; then
-        [ -e build ] || mkdir build
-        cd build
-        cmake -G "Unix Makefiles" ..
-        make && find . -name "${_TARGET}" -exec cp {} ../${_BUILD_TYPE}/ \;
+        cmake -G "Unix Makefiles" -B build -S .
+	_RET=$?
+
+	cmake --build build --config ${_BUILD_TYPE}
+	_RET=$?
+
+        find . -name "${_TARGET}" -exec cp {} ${_BUILD_TYPE}/ \;
+    else
+	echo "Already built: ${_TARGET}"
+	ls -lAh "build/libcef_dll_wrapper/${_TARGET}"
     fi
 else
     echo "Unknown/unsupported OS type: ${_OS}"
     exit -666
 fi
 popd
+
+echo export CEF_ROOT="${CEF_ROOT}" >> .env.local
