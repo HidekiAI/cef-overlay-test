@@ -46,3 +46,5 @@ CMakeFiles/
 *:*/
 cef_*/
 
+bin
+
