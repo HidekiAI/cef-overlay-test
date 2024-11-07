@@ -6,13 +6,33 @@ _BUILD_DIR=${2:-build}
 
 [ -e bin ] || ./get-binaries.sh ${_BUILD_TYPE}
 [ -e .env.local ] || ./get-binaries.sh ${_BUILD_TYPE}
-[ -e ${CEF_BIN_PATH_MAC}/Release/libcef.dylib ] || ./get-binaries.sh ${_BUILD_TYPE}
 
 cat .env.local
 source .env.local
 uname -a
 # `uname -o`: "GNU/Linux", "Msys", "Darwin"
 _OS=$(uname -o)
+
+[ -e ${CEF_BIN_PATH_MAC}/Release/libcef.dylib ] || ./get-binaries.sh ${_BUILD_TYPE}
+if [ "${CEF_ROOT}" == "" ] ; then
+    ./get-binaries.sh ${_BUILD_TYPE}
+    source .env.local
+fi
+
+# If CEF_ROOT is not defined after source'ing .env.local, then bail out
+if [ "${CEF_ROOT}" == "" ] ; then
+    echo "CEF_ROOT is not defined... exiting..."
+    exit -1
+fi
+# verify if CEF_ROOT is valid
+if [ ! -d "${CEF_ROOT}" ] ; then
+    echo "CEF_ROOT='${CEF_ROOT}' is not a valid directory... exiting..."
+    exit -1
+fi
+
+CMAKE_INCLUDE_PATH="${CEF_ROOT}/include"
+set -o nounset                              # Treat unset variables as an error
+export CEF_ROOT=${CEF_ROOT}
 
 # NOTE: On MinGW, depending on which script used to open the PTTY, you can end up with following 2 methods:
 # - $which clang -> /c/msys64/ucrt64/bin/clang
@@ -62,8 +82,6 @@ if [ "${_OS}" == "GNU/Linux" ]; then
     export VCPKG_DEFAULT_TRIPLET="x64-linux-static"
     export VCPKG_DEFAULT_HOST_TRIPLET="x64-linux-static"
     export CMAKE_INCLUDE_PATH="${CMAKE_INCLUDE_PATH}:./src:${CEF_BIN_PATH_LIN}/include:."
-    export CEF_ROOT=$(pwd)/${CEF_BIN_PATH_LIN}
-    export CEF_ROOT=${CEF_BIN_PATH_LIN}
 elif [ "${_OS}" == "Msys" ]; then
     export MSYSTEM=CLANG64
     # MSYSTEM: https://www.msys2.org/docs/environments/:
@@ -109,9 +127,6 @@ elif [ "${_OS}" == "Msys" ]; then
     elif [ "$_GENERATOR" == "Unix Makefiles" ]; then
         export CMAKE_MAKE_PROGRAM="$(which make.exe)"
     fi
-
-    export CEF_ROOT=$(pwd)/${CEF_BIN_PATH_WIN}
-    export CEF_ROOT=${CEF_BIN_PATH_WIN}
 elif [ "${_OS}" == "Darwin" ]; then
     echo "Setting up for macOS..."
     _BUILD_DIR="${_BUILD_DIR}.macos"
@@ -119,16 +134,18 @@ elif [ "${_OS}" == "Darwin" ]; then
     export VCPKG_DEFAULT_TRIPLET="arm64-osx-dynamic"
     export VCPKG_DEFAULT_HOST_TRIPLET="arm64-osx-dynamic"
     export CMAKE_INCLUDE_PATH="${CMAKE_INCLUDE_PATH}:./src:${CEF_BIN_PATH_MAC}/include:."
-    export CEF_ROOT=$(pwd)/${CEF_BIN_PATH_MAC}
-    export CEF_ROOT=${CEF_BIN_PATH_MAC}
 else
     echo "Unknown/unsupported OS type: ${_OS}"
     exit -666
 fi
+echo "# Checking if VCPKG_TARGET_TRIPLET='${VCPKG_TARGET_TRIPLET}' is valid..."
 _FOUND=$( vcpkg help triplet | grep "$VCPKG_TARGET_TRIPLET" )
 if [ "${_FOUND}" == "" ] ; then echo "Unable to find VCPKG_TARGET_TRIPLET='$VCPKG_TARGET_TRIPLET'" ; fi
+
+echo "##################################"
 [ -e ${_BUILD_DIR} ] || mkdir -p "${_BUILD_DIR}"
 export | sort | grep --color=auto "CMAKE\|VCPKG\|CXX\|CC\|CEF"
+echo "##################################"
 
 cmake --log-level DEBUG \
     -DCMAKE_BUILD_TYPE:STRING=${_BUILD_TYPE}     \

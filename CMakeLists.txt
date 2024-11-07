@@ -50,7 +50,18 @@ if (CMAKE_SOURCE_DIR STREQUAL CMAKE_BINARY_DIR)
     message(FATAL_ERROR "CMake must be run from outside the source directory")
 endif()
 
+# Verify some required ENV variables are preset or not
+if( NOT DEFINED ENV{CEF_ROOT} )
+    message(FATAL_ERROR "CEF_ROOT environment variable is not set - please `source .env.local` first (if file does not exist, please run `get-binaries.sh` then source the env file)")
+endif()
+set(CEF_ROOT $ENV{CEF_ROOT})
+
 #set_property(GLOBAL PROPERTY USE_FOLDERS ON)
+
+# set (local) LIB_PATHS variable before entering the platform-specific configurations so that each
+# platform can append to it
+set(LIB_PATHS "${CEF_ROOT}/Release")
+set(ENV{LIB_PATHS} "${LIB_PATHS}")
 
 # Platform-specific configurations and triplets
 # See: https://cmake.org/cmake/help/latest/variable/CMAKE_HOST_SYSTEM_NAME.html#variable:CMAKE_HOST_SYSTEM_NAME
@@ -69,6 +80,7 @@ if(Windows OR WIN32 OR MSYS OR MINGW OR OS_WINDOWS)
     endif()
     set(ENV{CEF_ROOT} ${CMAKE_SOURCE_DIR}/${CEF_BIN_PATH_WIN})
     set(CEF_ROOT ${CMAKE_SOURCE_DIR}/${CEF_BIN_PATH_WIN})
+     #list(APPEND LIB_PATHS "${CMAKE_SOURCE_DIR}/additional/path/windows")
 elseif(Linux OR ( UNIX AND NOT APPLE) OR OR_LINUX)
     set(ENV{VCPKG_TARGET_TRIPLET} "x64-linux-static")
     set(VCPKG_TARGET_TRIPLET "x64-linux-static")
@@ -83,6 +95,7 @@ elseif(Linux OR ( UNIX AND NOT APPLE) OR OR_LINUX)
     endif()
     set(ENV{CEF_ROOT} ${CMAKE_SOURCE_DIR}/${CEF_BIN_PATH_LIN})
     set(CEF_ROOT ${CMAKE_SOURCE_DIR}/${CEF_BIN_PATH_LIN})
+     #list(APPEND LIB_PATHS "${CMAKE_SOURCE_DIR}/additional/path/linux")
 elseif(Darwin OR APPLE OR OS_MAC)
     set(ENV{VCPKG_TARGET_TRIPLET} "x64-mac-static")
     set(VCPKG_TARGET_TRIPLET "x64-mac-static")
@@ -98,6 +111,7 @@ elseif(Darwin OR APPLE OR OS_MAC)
     endif()
     set(ENV{CEF_ROOT} ${CMAKE_SOURCE_DIR}/${CEF_BIN_PATH_MAC})
     set(CEF_ROOT ${CMAKE_SOURCE_DIR}/${CEF_BIN_PATH_MAC})
+     #list(APPEND LIB_PATHS "${CMAKE_SOURCE_DIR}/additional/path/macos")
 else()
     message(FATAL_ERROR "Unsupported platform")
 endif()
@@ -121,6 +135,10 @@ else()
     endif()
 endif()
 message(STATUS "ENV{CC} set to '$ENV{CC}' -> '${CMAKE_C_COMPILER}'")
+
+# Add library search paths
+message(STATUS "LIB_PATHS: '${LIB_PATHS}'")
+link_directories(${LIB_PATHS})
 
 if(DEFINED ENV{CXX} AND NOT CMAKE_CXX_COMPILER)
     set(ENV{CMAKE_CXX_COMPILER} $ENV{CXX})
@@ -209,35 +227,92 @@ configure_file(
 )
 include(FindCEF)
 
-
-# Link libraries (if any)
-#target_link_libraries(${PROJECT_NAME} PRIVATE your_library)
-
 configure_file(
     ${CMAKE_SOURCE_DIR}/src/CMakeLists.txt.in
     ${CMAKE_BINARY_DIR}/CMakeLists.txt
     @ONLY
 )
 
+## Test to see if ";" separator works
+#set(MY_TEST_ENV "a;b;c")
+#set(ENV{MY_TEST_ENV} ${MY_TEST_ENV})
+#message(STATUS "MY_TEST_ENV (allowed): ${MY_TEST_ENV}")
+#message(STATUS "ENV{MY_TEST_ENV} (disallowed): $ENV{MY_TEST_ENV}")
+## Don't work: assigns only 'a' and emits warning in CMake 4.14+
+#set(ENV{MY_SOURCES} a b c)
+## Works: assign list of 'a', 'b', 'c' elements
+#set(ENV{MY_SOURCES} "a;b;c")
+#message(STATUS "ENV{MY_SOURCES} (allowed): $ENV{MY_SOURCES}")
+## The same but using intermediate CMake variable
+#set(MY_SOURCES_TMP a b c)
+#message(STATUS "MY_SOURCES_TMP (allowed): ${MY_SOURCES_TMP}")
+#set(ENV{MY_SOURCES} "${MY_SOURCES_TMP}")
+#message(STATUS "ENV{MY_SOURCES} (allowed): $ENV{MY_SOURCES}")
+
 # Add config include and link-lib paths (for config, not for compilation/linking), it should be FULL PATH
 # Read the current value of the environment variable
+# Determine the path separator based on the operating system
+# NOTE: According to "https://cmake.org/cmake/help/git-master/variable/CMAKE_INCLUDE_PATH.html", CMAKE_INCLUDE_PATH is semicolon-separated list
 if(DEFINED ENV{CMAKE_INCLUDE_PATH})
-    set(CURRENT_INCLUDE_PATH $ENV{CMAKE_INCLUDE_PATH})
+  message(STATUS "CMAKE_INCLUDE_PATH: '$ENV{CMAKE_INCLUDE_PATH}'")
+  set(CURRENT_INCLUDE_PATH $ENV{CMAKE_INCLUDE_PATH})
 else()
-    set(CURRENT_INCLUDE_PATH "")
+  set(CURRENT_INCLUDE_PATH "")
+endif()
+if(NOT CURRENT_INCLUDE_PATH STREQUAL "")
+  list(APPEND NEW_INCLUDE_PATH ${CURRENT_INCLUDE_PATH})
 endif()
 # Append the new paths to the current value
-set(NEW_INCLUDE_PATH "${CURRENT_INCLUDE_PATH}:${CMAKE_SOURCE_DIR}/include:${CMAKE_BINARY_DIR}/include:${CEF_ROOT}/include")
-# Set the updated environment variable
-set(ENV{CMAKE_INCLUDE_PATH} ${NEW_INCLUDE_PATH})
+list(APPEND NEW_INCLUDE_PATH
+  ${CMAKE_SOURCE_DIR}/include
+  ${CMAKE_BINARY_DIR}/include
+  ${CEF_ROOT}/include
+  )
+# convert the list to a string with the appropriate separator (semicolon)
+list(JOIN NEW_INCLUDE_PATH ";" ENV{CMAKE_INCLUDE_PATH})
+set(CMAKE_INCLUDE_PATH $ENV{CMAKE_INCLUDE_PATH})
+message(STATUS "CMAKE_INCLUDE_PATH: '${CMAKE_INCLUDE_PATH}' (env: $ENV{CMAKE_INCLUDE_PATH}, NEW_INCLUDE_PATH: ${NEW_INCLUDE_PATH})")
 
+# NOTE: CMAKE_LIBRARY_PATH is a semicolon-separated list (see https://cmake.org/cmake/help/git-master/variable/CMAKE_LIBRARY_PATH.html)
 if(DEFINED ENV{CMAKE_LIBRARY_PATH})
-    set(CURRENT_LIBRARY_PATH $ENV{CMAKE_LIBRARY_PATH})
+  message(STATUS "CMAKE_LIBRARY_PATH: '$ENV{CMAKE_LIBRARY_PATH}'")
+  set(CURRENT_LIBRARY_PATH $ENV{CMAKE_LIBRARY_PATH})
 else()
-    set(CURRENT_LIBRARY_PATH "")
+  set(CURRENT_LIBRARY_PATH "")
 endif()
-set(NEW_LIBRARY_PATH "${CURRENT_LIBRARY_PATH}:${CMAKE_SOURCE_DIR}/lib:${CMAKE_BINARY_DIR}/lib:${CEF_ROOT}/lib")
-set(ENV{CMAKE_LIBRARY_PATH} ${NEW_LIBRARY_PATH})
+if(NOT CURRENT_LIBRARY_PATH STREQUAL "")
+  list(APPEND NEW_LIBRARY_PATH ${CURRENT_LIBRARY_PATH})
+endif()
+list(APPEND NEW_LIBRARY_PATH
+  ${CMAKE_SOURCE_DIR}/lib
+  ${CMAKE_BINARY_DIR}/lib
+  ${CEF_ROOT}/lib
+  ${CEF_ROOT}/build/libcef_dll_wrapper/
+  ${CEF_ROOT}/build/
+  )
+# convert the list to a string with the appropriate separator (semicolon)
+list(JOIN NEW_LIBRARY_PATH ";" ENV{CMAKE_LIBRARY_PATH})
+set(CMAKE_LIBRARY_PATH $ENV{CMAKE_LIBRARY_PATH}) 
+message(STATUS "CMAKE_LIBRARY_PATH: '${CMAKE_LIBRARY_PATH}' (env: $ENV{CMAKE_LIBRARY_PATH}, NEW_LIBRARY_PATH: ${NEW_LIBRARY_PATH})")
+
+link_directories(
+    ${CEF_ROOT}/Release/
+    ${CEF_ROOT}/build/
+    ${CMAKE_BINARY_DIR}/bin/
+    ${CEF_ROOT}/build/libcef_dll_wrapper/
+    )
+include_directories(
+    ${CEF_ROOT} 
+    ${CEF_ROOT}/include 
+    ${CMAKE_SOURCE_DIR}/src/
+    ${CMAKE_SOURCE_DIR}/include/
+    ${CMAKE_BINARY_DIR}/src/
+    ${CMAKE_BINARY_DIR}/include/
+    ./src/ 
+    ./src/include/
+    ./include/
+    )
+
 message(STATUS "INCLUDE paths: '${CMAKE_INCLUDE_PATH}' (for config, not compile, ENV: $ENV{CMAKE_INCLUDE_PATH})")
 message(STATUS "Package library paths: '${CMAKE_LIBRARY_PATH}' (used for config, not for link, ENV: $ENV{CMAKE_LIBRARY_PATH})")
 message(STATUS "VCPKG triplet: ${VCPKG_TARGET_TRIPLET} (ENV: $ENV{VCPKG_TARGET_TRIPLET})")
@@ -247,5 +322,26 @@ message(STATUS "CEF_ROOT: ${CEF_ROOT} (ENV: $ENV{CEF_ROOT})")
 # It is NOT a typo to add ${CMAKE_BINARY_DIR}/src instead of ${CMAKE_SOURCE_DIR}/src, this prevents
 # the "CMakeFiles" directories from being created in the source directory!
 add_subdirectory(./src ${CMAKE_BINARY_DIR}/src)
+
+# Define the paths based on the platform
+
+# define macro
+#macro(ADD_CEF_TARGET CEF_TARGET CEF_SOURCES)
+#  # Define your target
+#  add_executable(${CEF_TARGET} ${CEF_SOURCES})
+#
+#  # Link the prebuilt libraries by their filenames
+#  target_link_libraries(${CEF_TARGET} 
+#      PRIVATE 
+#      cef_dll_wrapper
+#      #other_lib
+#      #some_other_dynamic_lib
+#  )
+#endmacro()
+# Link libraries (if any)
+#target_link_libraries(${PROJECT_NAME} PRIVATE your_library)
+
+#./cef_macosarm64/build/libcef_dll_wrapper/libcef_dll_wrapper.a
+#set(ENV{CEF_LIBCEF_DLL_WRAPPER_PATH} "${CEF_ROOT}/build/libcef_dll_wrapper/libcef_dll_wrapper.a")
 
 message(STATUS "#################################### ${PROJECT_NAME} done")

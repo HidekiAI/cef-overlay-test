@@ -15,8 +15,9 @@ else
     echo "Please install tar"
     exit 1
 fi
+set -o nounset                              # Treat unset variables as an error
 
-[ -d bin ] || mkdir bin
+[ -d bin ] || mkdir -p bin
 cd bin
 
 #######################################################
