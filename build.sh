@@ -4,8 +4,9 @@
 _BUILD_TYPE=${1:-Release}
 _BUILD_DIR=${2:-build}
 
-[ -e bin ] || ./get-binaries.sh ${_BUILD_TYPE}
-[ -e .env.local ] || ./get-binaries.sh ${_BUILD_TYPE}
+#[ -e bin ] || ./get-binaries.sh ${_BUILD_TYPE}
+#[ -e bin ] || ./get-binaries.sh ${_BUILD_TYPE}
+./get-binaries.sh ${_BUILD_TYPE}
 
 cat .env.local
 source .env.local
@@ -14,10 +15,6 @@ uname -a
 _OS=$(uname -o)
 
 [ -e ${CEF_BIN_PATH_MAC}/Release/libcef.dylib ] || ./get-binaries.sh ${_BUILD_TYPE}
-if [ "${CEF_ROOT}" == "" ] ; then
-    ./get-binaries.sh ${_BUILD_TYPE}
-    source .env.local
-fi
 
 # If CEF_ROOT is not defined after source'ing .env.local, then bail out
 if [ "${CEF_ROOT}" == "" ] ; then
