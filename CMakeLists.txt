@@ -1,3 +1,12 @@
+#Legends:
+# ./CMakelists.txt (at root): This is the main CMakeLists.txt file that sets up the project and includes the other CMakeLists.txt files
+# - scripts (see build.sh) and commands should refer to this file, hence you'd do `cmake -B build -S .` to build the project
+# src/CMakeLists.txt.in: This is a template file that generates (commonly) config files dynamically, such as src/CMakeLists.txt
+# - this file is included in the main ./CMakeLists.txt file
+# *.cmake - i.e. Windows.cmake, Linux.cmake, MacOS.cmake: These are platform-specific CMake configuration files that are included
+# - by the main CMakeLists.txt file to set up the project for the specific platform via `include(${CMAKE_SYSTEM_NAME}.cmake)` or
+# - `include(${CMAKE_SOURCE_DIR}/Windows.cmake)`, `include(${CMAKE_SOURCE_DIR}/Linux.cmake)`, `include(${CMAKE_SOURCE_DIR}/MacOS.cmake) respectively
+# - ideally, you DO NOT want to use this method, because juggling variables from/to the main CMakeLists.txt file is bug-prone
 cmake_minimum_required(VERSION 3.30)
 
 # Set the C++ standard
@@ -67,6 +76,8 @@ set(ENV{LIB_PATHS} "${LIB_PATHS}")
 # See: https://cmake.org/cmake/help/latest/variable/CMAKE_HOST_SYSTEM_NAME.html#variable:CMAKE_HOST_SYSTEM_NAME
 # See also: https://cmake.org/cmake/help/latest/variable/CMAKE_SYSTEM_NAME.html
 if(Windows OR WIN32 OR MSYS OR MINGW OR OS_WINDOWS)
+    set(OS_WINDOWS TRUE)
+
     #NOTE: for UCRT64, you use "Windows" instead of "MinGW"
     set(ENV{VCPKG_TARGET_TRIPLET} "x64-windows-static")
     set(VCPKG_TARGET_TRIPLET "x64-mingw-static")
@@ -82,6 +93,8 @@ if(Windows OR WIN32 OR MSYS OR MINGW OR OS_WINDOWS)
     set(CEF_ROOT ${CMAKE_SOURCE_DIR}/${CEF_BIN_PATH_WIN})
      #list(APPEND LIB_PATHS "${CMAKE_SOURCE_DIR}/additional/path/windows")
 elseif(Linux OR ( UNIX AND NOT APPLE) OR OR_LINUX)
+    set(OS_LINUX TRUE)
+
     set(ENV{VCPKG_TARGET_TRIPLET} "x64-linux-static")
     set(VCPKG_TARGET_TRIPLET "x64-linux-static")
     set(CMAKE_INSTALL_PREFIX "/usr/local")
@@ -97,6 +110,8 @@ elseif(Linux OR ( UNIX AND NOT APPLE) OR OR_LINUX)
     set(CEF_ROOT ${CMAKE_SOURCE_DIR}/${CEF_BIN_PATH_LIN})
      #list(APPEND LIB_PATHS "${CMAKE_SOURCE_DIR}/additional/path/linux")
 elseif(Darwin OR APPLE OR OS_MAC)
+    set(OS_MAC TRUE)
+
     set(ENV{VCPKG_TARGET_TRIPLET} "x64-mac-static")
     set(VCPKG_TARGET_TRIPLET "x64-mac-static")
     set(CMAKE_MACOSX_RPATH ON)
@@ -114,6 +129,12 @@ elseif(Darwin OR APPLE OR OS_MAC)
      #list(APPEND LIB_PATHS "${CMAKE_SOURCE_DIR}/additional/path/macos")
 else()
     message(FATAL_ERROR "Unsupported platform")
+endif()
+
+# Ensure the Info.plist.in file is correctly referenced
+set(MAC_INFO_PLIST_IN "${CMAKE_SOURCE_DIR}/src/mac/Info.plist.in")
+if(NOT EXISTS "${MAC_INFO_PLIST_IN}")
+  message(FATAL_ERROR "Cannot find source file: ${MAC_INFO_PLIST_IN}")
 endif()
 
 # Check if the C and C++ compilers are set in the environment variables
@@ -217,21 +238,11 @@ list(APPEND CMAKE_MODULE_PATH
   )
 
 # Include directories
-include_directories(${CMAKE_SOURCE_DIR}/src ./ ./include ${CEF_ROOT}/include)
-
-# Process the template file
-configure_file(
-    ${CEF_ROOT}/cmake/FindCEF.cmake
-    ${CMAKE_BINARY_DIR}/FindCEF.cmake
-    @ONLY
-)
-include(FindCEF)
-
-configure_file(
-    ${CMAKE_SOURCE_DIR}/src/CMakeLists.txt.in
-    ${CMAKE_BINARY_DIR}/CMakeLists.txt
-    @ONLY
-)
+include_directories(
+    ${CMAKE_SOURCE_DIR}/src 
+    ./ 
+    ./include 
+    ${CEF_ROOT}/include)
 
 ## Test to see if ";" separator works
 #set(MY_TEST_ENV "a;b;c")
@@ -319,29 +330,36 @@ message(STATUS "VCPKG triplet: ${VCPKG_TARGET_TRIPLET} (ENV: $ENV{VCPKG_TARGET_T
 message(STATUS "CEF_ROOT: ${CEF_ROOT} (ENV: $ENV{CEF_ROOT})")
 
 # Finally, add the source files with all the configurations and ENV variables set...
-# It is NOT a typo to add ${CMAKE_BINARY_DIR}/src instead of ${CMAKE_SOURCE_DIR}/src, this prevents
-# the "CMakeFiles" directories from being created in the source directory!
-add_subdirectory(./src ${CMAKE_BINARY_DIR}/src)
+#add_subdirectory(
+#    ./src   # source
+#    ${CMAKE_BINARY_DIR}
+#    )
 
-# Define the paths based on the platform
+# Process the template file
+configure_file(
+    ${CEF_ROOT}/cmake/FindCEF.cmake
+    ${CMAKE_BINARY_DIR}/FindCEF.cmake
+    @ONLY   # only variables with @VAR@ are replaced...
+)
+include(FindCEF)
 
-# define macro
-#macro(ADD_CEF_TARGET CEF_TARGET CEF_SOURCES)
-#  # Define your target
-#  add_executable(${CEF_TARGET} ${CEF_SOURCES})
-#
-#  # Link the prebuilt libraries by their filenames
-#  target_link_libraries(${CEF_TARGET} 
-#      PRIVATE 
-#      cef_dll_wrapper
-#      #other_lib
-#      #some_other_dynamic_lib
-#  )
-#endmacro()
-# Link libraries (if any)
-#target_link_libraries(${PROJECT_NAME} PRIVATE your_library)
+# Set the current source directory to ./src
+set(CMAKE_CURRENT_SOURCE_DIR ${CMAKE_SOURCE_DIR}/src)
 
-#./cef_macosarm64/build/libcef_dll_wrapper/libcef_dll_wrapper.a
-#set(ENV{CEF_LIBCEF_DLL_WRAPPER_PATH} "${CEF_ROOT}/build/libcef_dll_wrapper/libcef_dll_wrapper.a")
+# Ensure the Info.plist.in file is correctly referenced
+set(MAC_INFO_PLIST_IN "${CMAKE_SOURCE_DIR}/src/mac/Info.plist.in")
+if(NOT EXISTS "${MAC_INFO_PLIST_IN}")
+  message(FATAL_ERROR "Cannot find source file: ${MAC_INFO_PLIST_IN}")
+endif()
+
+# CMakeLists.txt will get generated in BUILD dir and included immediately after `configure_file()` is called
+# from BUILD dir, not from SOURCE dir.
+# Prior to auto-generating from CMakeLists.txt.in, we WANT to make sure that CMAKE_CURRENT_SOURCE_DIR is set to the SOURCE dir!
+configure_file(
+    ${CMAKE_SOURCE_DIR}/src/CMakeLists.txt.in
+    ${CMAKE_BINARY_DIR}/CMakeLists.txt
+    @ONLY
+)
+include(${CMAKE_BINARY_DIR}/CMakeLists.txt)
 
 message(STATUS "#################################### ${PROJECT_NAME} done")

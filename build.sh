@@ -3,6 +3,22 @@
 # NOTE: I could do `uname` to check to see if it's MSYS but it's harmless to define MSYSTEM on Linux and/or macOS so we'll just export it...
 _BUILD_TYPE=${1:-Release}
 _BUILD_DIR=${2:-build}
+_PYTHON3_VRESION=3.11 	# DO NOT change this, it has to match whatever CEF tool uses (and is mentioned on their markdown file)!
+
+# NOTE: The CEF make tools relies HEAVILY on Python 3.11 libraries associted to Google SDK!
+#       Another way to put it is that if you have newer version of Python (i.e. 3.13), you're screwed!
+#       NOT SO OBVIOUS errors are messages such as when attempting to download from
+#       Google Storage (i.e. something of "gs://...") and you get "No module named 'gsutil'"
+#       or "No module named 'google'". This is because the Python 3.13 is not compatible with
+#       the Google SDK libraries that CEF uses. So, you need to install Python 3.11 and make
+#       sure that it's the default Python version.
+# python3 --version: Python 3.11.6
+_PY_VER=$(python3 --version | grep "${_PYTHON3_VRESION}")
+if [ "${_PY_VER}" == "" ] ; then
+    echo "Python version: $(python3 --version)"
+    echo "Python ${_PYTHON3_VRESION} is not the default Python version (it is strongly depended by Google SDK libraries)... exiting..."
+    exit -1
+fi
 
 #[ -e bin ] || ./get-binaries.sh ${_BUILD_TYPE}
 #[ -e bin ] || ./get-binaries.sh ${_BUILD_TYPE}
@@ -27,6 +43,23 @@ if [ ! -d "${CEF_ROOT}" ] ; then
     exit -1
 fi
 
+# Assume current directory where this 'build.sh' resides is the root of the project
+CMAKE_SOURCE_DIR="$(pwd)"
+
+# Set the current source directory to ./src
+export CMAKE_CURRENT_SOURCE_DIR=${CMAKE_SOURCE_DIR}/src
+if [ ! -d "${CMAKE_CURRENT_SOURCE_DIR}" ] ; then
+    echo "Cannot find source directory: ${CMAKE_CURRENT_SOURCE_DIR}... exiting..."
+    exit -1
+fi
+
+# Ensure the Info.plist.in file is correctly referenced
+MAC_INFO_PLIST_IN="${CMAKE_SOURCE_DIR}/src/mac/Info.plist.in"
+if [ ! -f "${MAC_INFO_PLIST_IN}" ] ; then
+    echo "Cannot find source file: ${MAC_INFO_PLIST_IN}... exiting..."
+    exit -1
+fi
+
 CMAKE_INCLUDE_PATH="${CEF_ROOT}/include"
 set -o nounset                              # Treat unset variables as an error
 export CEF_ROOT=${CEF_ROOT}
@@ -48,13 +81,37 @@ export CMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake
 # - Ninja: "Ninja"
 # - Visual Studio: "Visual Studio 16 2019"
 # - Xcode: "Xcode"
-#_GENERATOR=#"Ninja Multi-Config"
+# NOTE: CEF CMakeLists.txt uses "Unix Makefiles" as the ASSUMED generator!  So far, it's been very difficult
+# to make it work with "Ninja Multi-Config" or "Xcode" (for macOS). So, we'll stick with "Unix Makefiles" for now.
+#_GENERATOR="Ninja Multi-Config"
 _GENERATOR="Unix Makefiles"
+_GEN_TAG="make"
 if [ "$_GENERATOR" == "Ninja Multi-Config" ] ; then
+    _GEN_TAG="ninja"
     export CMAKE_MAKE_PROGRAM="$(which ninja)"
+    if [ "$CMAKE_MAKE_PROGRAM" == "" ] ; then
+	echo "Unable to find 'ninja' in PATH... exiting..."
+	exit -1
+    fi	
 elif [ "$_GENERATOR" == "Unix Makefiles" ]; then
+    _GEN_TAG="make"
     export CMAKE_MAKE_PROGRAM="$(which make)"
+    if [ "$CMAKE_MAKE_PROGRAM" == "" ] ; then
+	echo "Unable to find 'make' in PATH... exiting..."
+	exit -1
+    fi
+elif [ "$_GENERATOR" == "Xcode" ]; then
+    _GEN_TAG="xcode"
+    export CMAKE_MAKE_PROGRAM="$(which xcode)"
+    if [ "$CMAKE_MAKE_PROGRAM" == "" ] ; then
+    echo "Unable to find 'make' in PATH... exiting..."
+    exit -1
+    fi
+else
+    echo "Unknown/unsupported generator: '${_GENERATOR}'... exiting..."
+    exit -1
 fi
+echo "CMAKE_MAKE_PROGRAM='${CMAKE_MAKE_PROGRAM}' (for generator: '${_GENERATOR}')"
 
 if [ "$VCPKG_ROOT" == "" ] ; then
 	echo "Install vcpkg first!" 
@@ -74,7 +131,7 @@ echo "##################################"
 if [ "${_OS}" == "GNU/Linux" ]; then
     echo "Setting up for Linux..."
 
-    _BUILD_DIR="${_BUILD_DIR}.linux"
+    _BUILD_DIR="${_BUILD_DIR}.linux.${_BUILD_TYPE}.${_GEN_TAG}"
     export VCPKG_TARGET_TRIPLET="x64-linux-static"
     export VCPKG_DEFAULT_TRIPLET="x64-linux-static"
     export VCPKG_DEFAULT_HOST_TRIPLET="x64-linux-static"
@@ -104,7 +161,7 @@ elif [ "${_OS}" == "Msys" ]; then
         echo "MSYSTEM is not set... not forcing search paths..."
     fi
 
-    _BUILD_DIR="${_BUILD_DIR}.win.msys"
+    _BUILD_DIR="${_BUILD_DIR}.win.msys.${_BUILD_TYPE}.${_GEN_TAG}"
     #NOTE: for UCRT64, you use "Windows" instead of "MinGW"
     #export VCPKG_TARGET_TRIPLET="x64-mingw-static"
     export VCPKG_TARGET_TRIPLET="x64-windows-static"
@@ -126,11 +183,15 @@ elif [ "${_OS}" == "Msys" ]; then
     fi
 elif [ "${_OS}" == "Darwin" ]; then
     echo "Setting up for macOS..."
-    _BUILD_DIR="${_BUILD_DIR}.macos"
+    _BUILD_DIR="${_BUILD_DIR}.macos.${_BUILD_TYPE}.${_GEN_TAG}"
     export VCPKG_TARGET_TRIPLET="arm64-osx-dynamic"
     export VCPKG_DEFAULT_TRIPLET="arm64-osx-dynamic"
     export VCPKG_DEFAULT_HOST_TRIPLET="arm64-osx-dynamic"
     export CMAKE_INCLUDE_PATH="${CMAKE_INCLUDE_PATH}:./src:${CEF_BIN_PATH_MAC}/include:."
+
+    # we're using Xcode for build engine/generator
+    #_GENERATOR="Xcode"
+    #export CMAKE_MAKE_PROGRAM="$(which make)"
 else
     echo "Unknown/unsupported OS type: ${_OS}"
     exit -666
@@ -144,6 +205,10 @@ echo "##################################"
 export | sort | grep --color=auto "CMAKE\|VCPKG\|CXX\|CC\|CEF"
 echo "##################################"
 
+# NOTE: In order to get cmake to work with "Visual Studio 17" generator, you need to not only install MS BuildTools and install the Windows version of CMake (NOT Cygwin or MinGW)
+# Linux: cmake -G "Unix Makefiles" -DCMAKE_BUILD_TYPE=Release ..
+# Windows: cmake -G "Visual Studio 17" -A x64 ..
+# macOS: cmake -G "Xcode" -DPROJECT_ARCH="arm64" ..
 cmake --log-level DEBUG \
     -DCMAKE_BUILD_TYPE:STRING=${_BUILD_TYPE}     \
     -DCXX:STRING=${CXX}     \
@@ -160,7 +225,7 @@ cmake --log-level DEBUG \
     -DCMAKE_MAKE_PROGRAM:STRING=${CMAKE_MAKE_PROGRAM}   \
     -G "${_GENERATOR}"  \
     -B "${_BUILD_DIR}" \
-    -S .
+    -S "${CMAKE_SOURCE_DIR}"
 _RET=$?
 
 if [ $_RET -ne 0 ]; then
@@ -168,9 +233,8 @@ if [ $_RET -ne 0 ]; then
     exit ${_RET}
 fi
 echo "Switching to ${_BUILD_DIR} to ninja-make..."
-# cd ${_BUILD_DIR}
-# ninja
 cmake --build "${_BUILD_DIR}" --config ${_BUILD_TYPE} 
 _RET=$?
 
 exit ${_RET}
+

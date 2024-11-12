@@ -1,41 +1,396 @@
+# NOTE: '${CMAKE_SOURCE_DIR}/src/CMakeLists.txt.in' is used to dynamically generate 
+# '${CMAKE_BINARY_DIR}/${PROJECT_NAME}/CMakeLists.txt'
+# in which it will be Included immediately after `configure_file()`
+# is called.
+
+# NOTE: This generated file (in build dir) will assume that it will be include()'d
+# hence, one should assume all variables are already defined (externally) and will be
+# inherited.  Will need to check if for example, if I call `project(foobar)` here,
+# it will override caller or not.
+# (Interestingly, all variables newly defined here will propagate up to the original caller)
+# This means there are NO NEED to `set(CMAKE_CXX_STANDARD 17)` etc.
+if(Windows OR WIN32 OR MSYS OR MINGW OR OS_WINDOWS)
+  set(OS_WINDOWS TRUE)
+  message(STATUS "${PROJECT_NAME}: Template for Windows")
+elseif(Linux OR ( UNIX AND NOT APPLE) OR OR_LINUX)
+  set(OS_LINUX TRUE)
+  message(STATUS "${PROJECT_NAME}: Template for Linux")
+elseif(Darwin OR APPLE OR OS_MAC)
+  set(OS_MAC TRUE)
+  message(STATUS "${PROJECT_NAME}: Template for Mac")
+else()
+    message(FATAL_ERROR "${PROJECT_NAME}: Unsupported platform")
+endif()
+
+# Set the current source directory to ./src
+set(CMAKE_CURRENT_SOURCE_DIR ${CMAKE_SOURCE_DIR}/src)
+
+# make sure CMAKE_SOURCE_DIR && CMAKE_CURRENT_SOURCE_DIR exists
+if(NOT DEFINED CMAKE_SOURCE_DIR OR NOT DEFINED CMAKE_CURRENT_SOURCE_DIR)
+    message(FATAL_ERROR "${PROJECT_NAME}: CMAKE_SOURCE_DIR or CMAKE_CURRENT_SOURCE_DIR is not defined")
+endif()
+# make sure directory exists
+if(NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR})
+    message(FATAL_ERROR "${PROJECT_NAME}: CMAKE_CURRENT_SOURCE_DIR does not exist: ${CMAKE_CURRENT_SOURCE_DIR}")
+endif()
+# does src/win exist?
+if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/win")
+  message(FATAL_ERROR "Cannot find directory: ${CMAKE_CURRENT_SOURCE_DIR}/win") 
+endif()
+# does src/mac exist?
+if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/mac")
+  message(FATAL_ERROR "Cannot find directory: ${CMAKE_CURRENT_SOURCE_DIR}/mac") 
+endif()
+# Ensure the Info.plist.in file is correctly referenced
+# because the configure_file command (which is executed as part of
+# MACOSX_BUNDLE_INFO_PLIST) uses global env variables and would insert the
+# wrong values with multiple targets.
+set(MAC_INFO_PLIST_IN "${CMAKE_CURRENT_SOURCE_DIR}/mac/Info.plist.in")
+if(NOT EXISTS "${MAC_INFO_PLIST_IN}")
+  message(FATAL_ERROR "Cannot find source file: ${MAC_INFO_PLIST_IN}")
+endif()
+set(MACOSX_BUNDLE_INFO_PLIST  "${CMAKE_CURRENT_SOURCE_DIR}/mac/Info.plist.in")
+message(STATUS "${PROJECT_NAME}: MAC_INFO_PLIST_IN: '${MAC_INFO_PLIST_IN}' (CMAKE_CURRENT_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR})")
+message(STATUS "${PROJECT_NAME}: MACOSX_BUNDLE_INFO_PLIST: '${MACOSX_BUNDLE_INFO_PLIST}' (CMAKE_CURRENT_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR})")
+
+# #
+# # Source files.
+# #
+# 
+# # cefsimple sources.
+# {{
+#   'prefix': 'cefsimple',
+#   'set': 'CEFSIMPLE_SRCS',
+#   'includes': [
+#     'cefsimple_sources_common',
+#     'cefsimple_sources_win:WINDOWS',
+#     'cefsimple_sources_resources_win_rc:WINDOWS',
+#     'cefsimple_sources_mac:MAC',
+#     'cefsimple_sources_linux:LINUX',
+#   ],
+# }}
+# 
+# # cefsimple helper sources.
+# {{
+#   'prefix': 'cefsimple_helper',
+#   'includes': [
+#     'cefsimple_sources_mac_helper:MAC',
+#   ],
+# }}
+# 
+# # cefsimple resources.
+# {{
+#   'prefix': 'cefsimple_resources',
+#   'set': 'CEFSIMPLE_RESOURCES_SRCS',
+#   'includes': [
+#     'cefsimple_bundle_resources_mac:MAC',
+#   ],
+# }}
+set(CEFSIMPLE_RESOURCES_SRCS 
+)
+
+project(cefgodot)
+message(STATUS "#################################### ${PROJECT_NAME}")
+if("${CMAKE_BINARY_DIR}" STREQUAL "")
+    message(FATAL_ERROR "${PROJECT_NAME}: CMAKE_BINARY_DIR is empty. Please specify a valid build directory.")
+endif()
+
+if (CMAKE_SOURCE_DIR STREQUAL CMAKE_BINARY_DIR)
+    message(FATAL_ERROR "${PROJECT_NAME}: CMake must be run from outside the source directory")
+endif()
+
+message(STATUS "${PROJECT_NAME}: SOURCE: ${CMAKE_SOURCE_DIR}")
+message(STATUS "${PROJECT_NAME}: DEST (Output): ${CMAKE_BINARY_DIR}")
+message(STATUS "${PROJECT_NAME}: CMAKE_RUNTIME_OUTPUT_DIRECTORY: ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
+
+# Just fail if environment variable is not set (it should have been set on root CMakeLists.txt)
+if(NOT DEFINED ENV{CEF_BIN_PATH_WIN} OR NOT DEFINED ENV{CEF_BIN_PATH_LIN} OR NOT DEFINED ENV{CEF_BIN_PATH_MAC})
+    message(FATAL_ERROR "${PROJECT_NAME}: CEF_BIN_PATH_WIN, CEF_BIN_PATH_LIN, and/or CEF_BIN_PATH_MAC environment variable is not set")
+endif(  )
+if(NOT DEFINED ENV{CC} OR NOT DEFINED ENV{CMAKE_C_COMPILER})
+    message(FATAL_ERROR "${PROJECT_NAME}: CC environment variable is not set and clang not found in PATH")
+endif()
+message(STATUS "${PROJECT_NAME}: ENV{CC} set to '$ENV{CC}' -> '${CMAKE_C_COMPILER}'")
+
+if(NOT DEFINED ENV{CXX} OR NOT DEFINED ENV{CMAKE_CXX_COMPILER})
+    message(FATAL_ERROR "${PROJECT_NAME}: CXX environment variable is not set and clang++ not found in PATH")
+endif()
+message(STATUS "${PROJECT_NAME}: ENV{CXX} set to '$ENV{CXX}' -> '${CMAKE_CXX_COMPILER}'")
+
+if(NOT DEFINED ENV{VCPKG_ROOT})
+    message(FATAL_ERROR "${PROJECT_NAME}: Unable to locate vcpkg, please install it first")
+endif()
+message(STATUS "${PROJECT_NAME}: VCPKG_ROOT: ${VCPKG_ROOT}")
+
+if(NOT DEFINED ENV{VCPKG_TARGET_TRIPLET})
+    message(FATAL_ERROR "${PROJECT_NAME}: Unable to locate vcpkg, please install it first")
+endif()
+message(STATUS "${PROJECT_NAME}: VCPKG_TARGET_TRIPLET: ${VCPKG_TARGET_TRIPLET}")
+
+if (CMAKE_SYSTEM_NAME STREQUAL "Linux" OR CMAKE_SYSTEM_NAME STREQUAL "Windows")
+    message(STATUS "${PROJECT_NAME}: Configuring for Linux or Windows")
+elseif (CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+    message(STATUS "${PROJECT_NAME}: Configuring for macOS")
+else()
+    message(STATUS "${PROJECT_NAME}: Unknown/Unhandled CMAKE_SYSTEM_NAME")
+endif()
+
+######################################################
+#add_subdirectory(
+#    .   # source
+#    #${CMAKE_BINARY_DIR}/${CMAKE_BUILD_TYPE}/${PROJECT_NAME}/    # target
+#    ${CMAKE_BINARY_DIR}
+#    )
+
+###################################################### 
+# If we have other custom libraries that needs to be built first and linked as separate library:
+#set(MY_EXTERNAL_LIB "my_external_lib")
+
+# PROJECT_NAME will be the executable name (i.e. "MySampleCEFTestApp_Src.exe")
+# source files relative to THIS CMakeLists.txt file...
+set(MY_SOURCES
+    src/simple_app.cc
+    src/simple_handler.cc
+)
+
+# Collect all .cc files in the src/browser directory
+#file(GLOB_RECURSE BROWSER_WIN_SOURCES browser/*_win.*)
+#file(GLOB_RECURSE BROWSER_LIN_SOURCES browser/*_gtk.*)
+#file(GLOB_RECURSE BROWSER_MAC_SOURCES browser/*_mac.*)
+#file(GLOB_RECURSE COMMON_SOURCES common/*.cc)
+#file(GLOB_RECURSE COMMON_HEADERS common/*.h)
+#file(GLOB_RECURSE RENDERER_SOURCES renderer/*.cc)
+#file(GLOB_RECURSE RENDERER_HEADERS renderer/*.h)
+#file(GLOB_RECURSE RESOURCES_SOURCES resources/*.cc)
+#file(GLOB_RECURSE RESOURCES_HEADERS resources/*.h)
+
+######################################################
+# Transfer ENV to local variables:
+
+# Platform-specific settings - have to first check for MSYS/MinGW or else it'll think it's UNIX type
+if(NOT DEFINED ENV{CEF_ROOT} OR NOT DEFINED ENV{CEF_BIN_PATH_WIN} OR NOT DEFINED ENV{CEF_BIN_PATH_LIN} OR NOT DEFINED ENV{CEF_BIN_PATH_MAC})
+    message(FATAL_ERROR "${PROJECT_NAME}: CEF_BIN_PATH_WIN environment variable is not set")
+endif()
+
+# Set the CEF_ROOT based on the environment variable
+set(CEF_ROOT $ENV{CEF_ROOT})
+
+######################################################
+
+if(Windows OR WIN32 OR MSYS OR MINGW OR OS_WINDOWS)
+    set(OS_WINDOWS TRUE)
+    message(STATUS "${PROJECT_NAME}: Configuring for Windows")
+
+    # Use the environment variable
+    message(STATUS "${PROJECT_NAME}: CEF_BIN_PATH_WIN is set to '${CEF_BIN_PATH_WIN}' ($ENV{CEF_BIN_PATH_WIN})")
+
+    # append Windows specific source
+    list(APPEND MY_SOURCES 
+      src/cefsimple_win.cc
+      src/simple_handler_win.cc
+    )
+
+    #target_compile_definitions(${PROJECT_NAME} PRIVATE -D_WINDOWS)
+    file(GLOB_RECURSE WIN_SOURCES win/*.cc)
+    file(GLOB_RECURSE WIN_HEADERS win/*.h)
+elseif(Linux OR ( UNIX AND NOT APPLE) OR OR_LINUX)
+    set(OS_LINUX TRUE)
+    message(STATUS "${PROJECT_NAME}: Configuring for Linux (including WSL2)")
+
+    # Use the environment variable
+    message(STATUS "${PROJECT_NAME}: CEF_BIN_PATH_LIN is set to '${CEF_BIN_PATH_LIN}' ($ENV{CEF_BIN_PATH_LIN})")
+
+    # append Linux specific source
+    list(APPEND MY_SOURCES 
+      src/cefsimple_linux.cc
+      src/simple_handler_linux.cc
+    )
+elseif(Darwin OR APPLE OR OS_MAC)
+    set(OS_MAC TRUE)
+    message(STATUS "${PROJECT_NAME}: Configuring for macOS")
+
+    # Use the environment variable
+    message(STATUS "${PROJECT_NAME}: CEF_BIN_PATH_MAC is set to '${CEF_BIN_PATH_MAC}' ($ENV{CEF_BIN_PATH_MAC})")
+
+    # append macOS specific source (OBJCXX)
+    list(APPEND MY_SOURCES 
+	    src/cefsimple_mac.swift
+      src/simple_handler_mac.swift
+    )
+
+    file(GLOB_RECURSE MAC_SOURCES mac/*.cc)
+    file(GLOB_RECURSE MAC_HEADERS mac/*.h)
+else()
+    message(FATAL_ERROR "${PROJECT_NAME}: Unsupported platform")
+endif()
+
+message(STATUS "${PROJECT_NAME}: CEF_ROOT: ${CEF_ROOT}")
+list(APPEND CMAKE_MODULE_PATH ${CEF_ROOT}/cmake)
+
+# Include directories based on ${CEF_BIN_PATH_XXX}/include"
+link_directories(
+    ${CEF_ROOT}/Release/
+    ${CEF_ROOT}/build/
+    ${CMAKE_BINARY_DIR}/bin/
+    ${CMAKE_BINARY_DIR}/lib/
+    ${CMAKE_BINARY_DIR}/${PROJECT_NAME}/
+    ${CEF_ROOT}/build/libcef_dll_wrapper/
+    )
+include_directories(
+    ${CEF_ROOT} 
+    ${CEF_ROOT}/include 
+    ${CMAKE_SOURCE_DIR}/src/
+    ${CMAKE_SOURCE_DIR}/include/
+    ${CMAKE_BINARY_DIR}/${PROJECT_NAME}/src/
+    ${CMAKE_BINARY_DIR}/${PROJECT_NAME}/include/
+    ./src/ 
+    ./src/include/
+    ./include/
+    )
+
+# Note: link_directories() is for link-time usage, while CMAKE_LIBRARY_PATH is for cmake to search for packages
+if (DEFINED ENV{CMAKE_LIBRARY_PATH})
+    list(APPEND CMAKE_LIBRARY_PATH $ENV{CMAKE_LIBRARY_PATH})
+endif()
+if (DEFINED ENV{CMAKE_INCLUDE_PATH})
+    list(APPEND CMAKE_INCLUDE_PATH $ENV{CMAKE_INCLUDE_PATH})
+endif()
+message(STATUS "${PROJECT_NAME}: INCLUDE paths: '${CMAKE_INCLUDE_PATH}' (for config, not compile)")
+message(STATUS "${PROJECT_NAME}: Package library paths: '${CMAKE_LIBRARY_PATH}' (used for config, not for link)")
+message(STATUS "${PROJECT_NAME}: VCPKG triplet: ${VCPKG_TARGET_TRIPLET}")
+message(STATUS "${PROJECT_NAME}: CEF_ROOT: ${CEF_ROOT}")
+
+# fail if VCPKG_ROOT and/or VCPKG_TARGET_TRIPLET is not set (or oddly, set to ".")
+if(NOT DEFINED VCPKG_ROOT OR NOT DEFINED VCPKG_TARGET_TRIPLET OR VCPKG_TARGET_TRIPLET STREQUAL ".")
+    message(FATAL_ERROR "${PROJECT_NAME}: VCPKG_ROOT and/or VCPKG_TARGET_TRIPLET is not set")
+endif()
+
+# fail if CEF_ROOT is not set
+if (NOT DEFINED CEF_ROOT)
+    message(FATAL_ERROR "${PROJECT_NAME}: CEF_ROOT is not set")
+endif()
+
+
+######################################################
+# If we have other custom libraries that needs to be built first and linked as separate library:
+#add_library( ${MY_EXTERNAL_LIB} STATIC 
+#    my_external_lib.cpp 
+#    my_external_lib.h)
+## Set the output directories for your targets (has to be set AFTER add_library() call)
+#set_target_properties( ${MY_EXTERNAL_LIB} PROPERTIES 
+#    ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib
+#    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib
+#    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}
+#)
+
+add_executable( ${PROJECT_NAME} 
+  ${MY_SOURCES} 
+  ) 
+
+# Reminder: Constantly forget that when linking files such as 'libcef.*' and 'libcef_dll_wrapper.*',
+# both g++ and clang++ arg '-l' do not require prefix "lib" and suffix ".a" or ".so" or ".dylib", hence
+# just list it as "cef" and "cef_dll_wrapper" respectively or else you'll get a linker error
+if(Windows OR WIN32 OR MSYS OR MINGW OR OS_WINDOWS)
+    # NOTE: if you declare explicitly (i.e. 'libcef.lib'), CMake will auto-relace with '-lcef' for 'libcef.lib'
+    #target_link_libraries(${PROJECT_NAME} PRIVATE ${MY_EXTERNAL_LIB} libcef.lib)
+    target_link_libraries(${PROJECT_NAME} PRIVATE 
+        stdc++
+        ${MY_EXTERNAL_LIB} 
+        cef_dll_wrapper
+        cef)
+    # define as OS_WINDOWS for Windows
+    target_compile_definitions(${PROJECT_NAME} PRIVATE -D_WINDOWS -DOS_WINDOWS)
+elseif(Linux OR ( UNIX AND NOT APPLE) OR OR_LINUX)
+    # NOTE: it'll compile "my_internal_lib.cpp" as "my_internal_lib.cpp.o"
+    target_link_libraries(${PROJECT_NAME} PRIVATE 
+        -static-libstdc++
+        ${MY_EXTERNAL_LIB} 
+        cef_dll_wrapper
+        cef)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE -D_LINUX -DOS_LINUX)
+elseif(Darwin OR APPLE OR OS_MAC)
+    target_link_libraries(${PROJECT_NAME} PRIVATE 
+        c++
+        "-framework Foundation" 
+        "-framework AppKit" 
+        "-framework Cocoa" 
+        ${MY_EXTERNAL_LIB} 
+        cef
+        cef_dll_wrapper
+        )
+    #target_link_libraries(HelloWorld
+    #    "-framework Foundation"
+    #)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE -D_MAC -DOS_MAC)
+endif()
+######################################################
+
 # Copyright (c) 2014 The Chromium Embedded Framework Authors. All rights
 # reserved. Use of this source code is governed by a BSD-style license that
 # can be found in the LICENSE file.
 
-#
-# Source files.
-#
 
 # cefsimple sources.
-{{
-  'prefix': 'cefsimple',
-  'set': 'CEFSIMPLE_SRCS',
-  'includes': [
-    'cefsimple_sources_common',
-    'cefsimple_sources_win:WINDOWS',
-    'cefsimple_sources_resources_win_rc:WINDOWS',
-    'cefsimple_sources_mac:MAC',
-    'cefsimple_sources_linux:LINUX',
-  ],
-}}
+set(CEFSIMPLE_SRCS
+  simple_app.cc
+  simple_app.h
+  simple_handler.cc
+  simple_handler.h
+  )
+set(CEFSIMPLE_SRCS_LINUX
+  cefsimple_linux.cc
+  simple_handler_linux.cc
+  )
+set(CEFSIMPLE_SRCS_MAC
+  cefsimple_mac.swift
+  simple_handler_mac.swift
+  )
+set(CEFSIMPLE_SRCS_WINDOWS
+  cefsimple_win.cc
+  resource.h
+  simple_handler_win.cc
+  )
+  # APPEND_PLATFORM_SOURCES() is defined in cmake/cef_macros.cmake.
+APPEND_PLATFORM_SOURCES(CEFSIMPLE_SRCS)
+source_group(cefsimple FILES ${CEFSIMPLE_SRCS})
+
+set(CEFSIMPLE_WIN_SRCS_WINDOWS
+  win/cefsimple.rc
+  )
+APPEND_PLATFORM_SOURCES(CEFSIMPLE_WIN_SRCS)
+source_group(cefsimple\\\\win FILES ${CEFSIMPLE_WIN_SRCS})
+
+set(CEFSIMPLE_SRCS
+  ${CEFSIMPLE_SRCS}
+  ${CEFSIMPLE_WIN_SRCS}
+  )
 
 # cefsimple helper sources.
-{{
-  'prefix': 'cefsimple_helper',
-  'includes': [
-    'cefsimple_sources_mac_helper:MAC',
-  ],
-}}
+set(CEFSIMPLE_HELPER_SRCS_MAC
+  process_helper_mac.cc
+  )
+APPEND_PLATFORM_SOURCES(CEFSIMPLE_HELPER_SRCS)
+source_group(cefsimple FILES ${CEFSIMPLE_HELPER_SRCS})
 
 # cefsimple resources.
-{{
-  'prefix': 'cefsimple_resources',
-  'set': 'CEFSIMPLE_RESOURCES_SRCS',
-  'includes': [
-    'cefsimple_bundle_resources_mac:MAC',
-  ],
-}}
+set(CEFSIMPLE_RESOURCES_MAC_SRCS_MAC
+  mac/Info.plist.in
+  mac/cefsimple.icns
+  )
+APPEND_PLATFORM_SOURCES(CEFSIMPLE_RESOURCES_MAC_SRCS)
+source_group(cefsimple\\\\mac FILES ${CEFSIMPLE_RESOURCES_MAC_SRCS})
 
+set(CEFSIMPLE_RESOURCES_MAC_ENGLISH_LPROJ_SRCS_MAC
+  mac/English.lproj/InfoPlist.strings
+  mac/English.lproj/MainMenu.xib
+  )
+APPEND_PLATFORM_SOURCES(CEFSIMPLE_RESOURCES_MAC_ENGLISH_LPROJ_SRCS)
+source_group(cefsimple\\\\mac\\\\English.lproj FILES ${CEFSIMPLE_RESOURCES_MAC_ENGLISH_LPROJ_SRCS})
+
+set(CEFSIMPLE_RESOURCES_SRCS
+  ${CEFSIMPLE_RESOURCES_MAC_SRCS}
+  ${CEFSIMPLE_RESOURCES_MAC_ENGLISH_LPROJ_SRCS}
+  )
 
 #
 # Shared configuration.
@@ -54,6 +409,10 @@ endif()
 # Determine the target output directory.
 SET_CEF_TARGET_OUT_DIR()
 
+message(STATUS "${PROJECT_NAME}: CEF_TARGET: '${CEF_TARGET}'")
+
+# NOTE: No need to add_dependencies() for libcef_dll_wrapper and other libraries, as they are already
+# built (compiled) in CEF_ROOT/Release directory
 
 #
 # Linux configuration.
@@ -61,10 +420,16 @@ SET_CEF_TARGET_OUT_DIR()
 
 if(OS_LINUX)
   # Executable target.
-  add_executable(${CEF_TARGET} ${CEFSIMPLE_SRCS})
+  add_executable(${CEF_TARGET} 
+    ${CEFSIMPLE_SRCS})
   SET_EXECUTABLE_TARGET_PROPERTIES(${CEF_TARGET})
-  add_dependencies(${CEF_TARGET} libcef_dll_wrapper)
-  target_link_libraries(${CEF_TARGET} libcef_lib libcef_dll_wrapper ${CEF_STANDARD_LIBS})
+  #add_dependencies(${CEF_TARGET} libcef_dll_wrapper)
+  add_dependencies(${CEF_TARGET} cef_dll_wrapper)
+  target_link_libraries(${CEF_TARGET} 
+    libcef_lib 
+    libcef_dll_wrapper 
+    cef_dll_wrapper 
+    ${CEF_STANDARD_LIBS})
 
   # Set rpath so that libraries can be placed next to the executable.
   set_target_properties(${CEF_TARGET} PROPERTIES INSTALL_RPATH "$ORIGIN")
@@ -81,7 +446,6 @@ if(OS_LINUX)
   # Set SUID permissions on the chrome-sandbox target.
   SET_LINUX_SUID_PERMISSIONS("${CEF_TARGET}" "${CEF_TARGET_OUT_DIR}/chrome-sandbox")
 endif()
-
 
 #
 # Mac OS X configuration.
@@ -111,10 +475,16 @@ if(OS_MAC)
   endif()
 
   # Main app bundle target.
-  add_executable(${CEF_TARGET} MACOSX_BUNDLE ${CEFSIMPLE_RESOURCES_SRCS} ${CEFSIMPLE_SRCS})
+  add_executable(${CEF_TARGET} MACOSX_BUNDLE 
+    ${CEFSIMPLE_RESOURCES_SRCS} 
+    ${CEFSIMPLE_SRCS})
   SET_EXECUTABLE_TARGET_PROPERTIES(${CEF_TARGET})
-  add_dependencies(${CEF_TARGET} libcef_dll_wrapper)
-  target_link_libraries(${CEF_TARGET} libcef_dll_wrapper ${CEF_STANDARD_LIBS})
+  #add_dependencies(${CEF_TARGET} libcef_dll_wrapper)
+  add_dependencies(${CEF_TARGET} cef_dll_wrapper)
+  target_link_libraries(${CEF_TARGET} 
+    libcef_dll_wrapper 
+    cef_dll_wrapper 
+    ${CEF_STANDARD_LIBS})
   set_target_properties(${CEF_TARGET} PROPERTIES
     MACOSX_BUNDLE_INFO_PLIST ${CMAKE_CURRENT_SOURCE_DIR}/mac/Info.plist.in
     )
@@ -129,13 +499,24 @@ if(OS_MAC)
     VERBATIM
     )
 
+  message(STATUS "${PROJECT_NAME}: CEF_HELPER_APP_SUFFIXES: '${CEF_HELPER_APP_SUFFIXES}'")
+
   # Create the multiple Helper app bundle targets.
   foreach(_suffix_list ${CEF_HELPER_APP_SUFFIXES})
     # Convert to a list and extract the suffix values.
     string(REPLACE ":" ";" _suffix_list ${_suffix_list})
+    #message(STATUS "${PROJECT_NAME}: Suffix: '${_suffix_list}'")
+
+    # if list is empty then skip
+    if (NOT _suffix_list)
+      continue()
+    endif()
     list(GET _suffix_list 0 _name_suffix)
     list(GET _suffix_list 1 _target_suffix)
     list(GET _suffix_list 2 _plist_suffix)
+    #message(STATUS "${PROJECT_NAME}: NameSuffix: '${_name_suffix}'")
+    #message(STATUS "${PROJECT_NAME}: TargetSuffix: '${_target_suffix}'")
+    #message(STATUS "${PROJECT_NAME}: PlistSuffix: '${_plist_suffix}'")
 
     # Define Helper target and output names.
     set(_helper_target "${CEF_HELPER_TARGET}${_target_suffix}")
@@ -146,6 +527,8 @@ if(OS_MAC)
     # MACOSX_BUNDLE_INFO_PLIST) uses global env variables and would insert the
     # wrong values with multiple targets.
     set(_helper_info_plist "${CMAKE_CURRENT_BINARY_DIR}/helper-Info${_target_suffix}.plist")
+    # i.e. 'cef_macosarm64/tests/cefsimple/mac/helper-Info.plist.in'
+    # Assuming it's already copied to ./src as 'src/mac/helper-Info.plist.in'
     file(READ "${CMAKE_CURRENT_SOURCE_DIR}/mac/helper-Info.plist.in" _plist_contents)
     string(REPLACE "\${EXECUTABLE_NAME}" "${_helper_output_name}" _plist_contents ${_plist_contents})
     string(REPLACE "\${PRODUCT_NAME}" "${_helper_output_name}" _plist_contents ${_plist_contents})
@@ -153,17 +536,25 @@ if(OS_MAC)
     file(WRITE ${_helper_info_plist} ${_plist_contents})
 
     # Create Helper executable target.
-    add_executable(${_helper_target} MACOSX_BUNDLE ${CEFSIMPLE_HELPER_SRCS})
+    add_executable(${_helper_target} MACOSX_BUNDLE 
+      ${CEFSIMPLE_HELPER_SRCS})
     SET_EXECUTABLE_TARGET_PROPERTIES(${_helper_target})
-    add_dependencies(${_helper_target} libcef_dll_wrapper)
-    target_link_libraries(${_helper_target} libcef_dll_wrapper ${CEF_STANDARD_LIBS})
+    #add_dependencies(${_helper_target} libcef_dll_wrapper)
+    add_dependencies(${_helper_target} cef_dll_wrapper)
+    target_link_libraries(${_helper_target} 
+      libcef_dll_wrapper 
+      cef_dll_wrapper 
+      ${CEF_STANDARD_LIBS})
     set_target_properties(${_helper_target} PROPERTIES
       MACOSX_BUNDLE_INFO_PLIST ${_helper_info_plist}
       OUTPUT_NAME ${_helper_output_name}
       )
 
     if(USE_SANDBOX)
-      target_link_libraries(${_helper_target} cef_sandbox_lib)
+      target_link_libraries(${_helper_target} 
+        libcef_sandbox_lib 
+        cef_sandbox_lib 
+        )
     endif()
 
     # Add the Helper as a dependency of the main executable target.
@@ -195,15 +586,24 @@ endif()
 
 if(OS_WINDOWS)
   # Executable target.
-  add_executable(${CEF_TARGET} WIN32 ${CEFSIMPLE_SRCS})
-  add_dependencies(${CEF_TARGET} libcef_dll_wrapper)
+  add_executable(${CEF_TARGET} WIN32 
+    ${CEFSIMPLE_SRCS})
+  #add_dependencies(${CEF_TARGET} libcef_dll_wrapper)
+  add_dependencies(${CEF_TARGET} cef_dll_wrapper)
   SET_EXECUTABLE_TARGET_PROPERTIES(${CEF_TARGET})
-  target_link_libraries(${CEF_TARGET} libcef_lib libcef_dll_wrapper ${CEF_STANDARD_LIBS})
+  target_link_libraries(${CEF_TARGET} 
+    libcef_lib 
+    libcef_dll_wrapper 
+    cef_dll_wrapper 
+    ${CEF_STANDARD_LIBS})
 
   if(USE_SANDBOX)
     # Logical target used to link the cef_sandbox library.
     ADD_LOGICAL_TARGET("cef_sandbox_lib" "${CEF_SANDBOX_LIB_DEBUG}" "${CEF_SANDBOX_LIB_RELEASE}")
-    target_link_libraries(${CEF_TARGET} cef_sandbox_lib ${CEF_SANDBOX_STANDARD_LIBS})
+    target_link_libraries(${CEF_TARGET} 
+      libcef_sandbox_lib 
+      cef_sandbox_lib 
+      ${CEF_SANDBOX_STANDARD_LIBS})
   endif()
 
   # Add the custom manifest files to the executable.
@@ -213,3 +613,8 @@ if(OS_WINDOWS)
   COPY_FILES("${CEF_TARGET}" "${CEF_BINARY_FILES}" "${CEF_BINARY_DIR}" "${CEF_TARGET_OUT_DIR}")
   COPY_FILES("${CEF_TARGET}" "${CEF_RESOURCE_FILES}" "${CEF_RESOURCE_DIR}" "${CEF_TARGET_OUT_DIR}")
 endif()
+
+###################################################### 
+message(STATUS "#################################### ${PROJECT_NAME} done")
+
+######################################################
