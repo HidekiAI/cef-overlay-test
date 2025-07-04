@@ -50,4 +50,5 @@ bin/
 *.tmp
 *.log
 bin
+.DS_Store
 
